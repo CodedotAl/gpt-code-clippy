@@ -5,8 +5,8 @@
     --dataset_config_name="python" \
     --do_train --do_eval \
     --block_size="128" \
-    --per_device_train_batch_size="8" \
-    --per_device_eval_batch_size="8" \
+    --per_device_train_batch_size="64" \
+    --per_device_eval_batch_size="128" \
     --learning_rate="5e-3" \
     --warmup_steps="1000" \
     --adam_beta1="0.9" \
