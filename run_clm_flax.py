@@ -254,6 +254,9 @@ def main():
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
+    #links output dir to home dir 
+    training_args.output_dir = (Path.home()/training_args.output_dir).as_posix() 
+
     if (
         os.path.exists(training_args.output_dir)
         and os.listdir(training_args.output_dir)
