@@ -1,3 +1,4 @@
+#! /bin/bash
 ./run_clm_flax.py \
     --output_dir="gpt-neo-125M-code-clippy" \
     --model_name_or_path="EleutherAI/gpt-neo-125M" \
