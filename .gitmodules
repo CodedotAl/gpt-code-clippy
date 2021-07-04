@@ -1,0 +1,3 @@
+[submodule "dependency_repos/github-downloader"]
+	path = dependency_repos/github-downloader
+	url = https://github.com/EleutherAI/github-downloader
