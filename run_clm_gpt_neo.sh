@@ -1,5 +1,5 @@
 #! /bin/bash
-./run_clm_flax_neo.py \
+./run_clm_flax.py \
     --output_dir $HOME/gpt-neo-125M-code-clippy \
     --model_name_or_path="EleutherAI/gpt-neo-125M" \
     --dataset_name="code_search_net" \
@@ -15,5 +15,4 @@
     --weight_decay="0.01" \
     --overwrite_output_dir \
     --num_train_epochs="1" \
-    --push_to_hub True \
-    --adafactor
+    --push_to_hub False
