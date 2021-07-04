@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-# Took the following from CodeXGlue Repository - https://github.com/microsoft/CodeXGLUE/blob/main/Code-Code/code-to-code-trans/evaluator/CodeBLEU/bleu.py
+# The following code is taken from CodeXGlue Repository - https://github.com/microsoft/CodeXGLUE/blob/main/Code-Code/code-to-code-trans/evaluator/CodeBLEU/bleu.py
 
 
 """Python implementation of BLEU and smooth-BLEU.
