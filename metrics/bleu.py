@@ -114,10 +114,12 @@ def compute_bleu(reference_corpus, translation_corpus, max_order=4,
   return bleu_score_dict#(bleu, precisions, bp, ratio, translation_length, reference_length)
 
 def bleu_test_case():
-    generated = [["a","=","b","\n","y","=","a","+","1"]]
+    """A simple functionality test case to evaluate BLEU"""
+    generated = [[["a","=","b","\n","y","=","a","+","1"]]]
     reference = [["a","=","b","\n","print","a"]]
-    score_dict = compute_bleu(generated,reference)
+    score_dict = compute_bleu(generated,reference,smooth=False)
     return score_dict
 
 if __name__ == "__main__":
     score_dict = bleu_test_case()
+    print(score_dict)
