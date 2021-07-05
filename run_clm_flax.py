@@ -170,6 +170,10 @@ class DataTrainingArguments:
         default=None,
         metadata={"help": "The number of processes to use for the preprocessing."},
     )
+    text_column_name: Optional[str] = field(
+        default='text',
+        metadata={"help": "Column containing main text data."},
+    )
 
     def __post_init__(self):
         if self.dataset_name is None and self.train_file is None and self.validation_file is None:
@@ -366,7 +370,7 @@ def main():
         column_names = dataset["train"].column_names
     else:
         column_names = dataset["validation"].column_names
-    text_column_name = "text" if "text" in column_names else column_names[0]
+    text_column_name = data_args.text_column_name
 
     # since this will be pickled to avoid _LazyModule error in Hasher force logger loading before tokenize_function
     tok_logger = transformers.utils.logging.get_logger("transformers.tokenization_utils_base")
