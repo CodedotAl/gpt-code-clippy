@@ -562,34 +562,34 @@ def main():
     epochs = tqdm(range(num_epochs), desc=f"Epoch ... (1/{num_epochs})", position=0)
     for epoch in epochs:
         # ======================== Training ================================
-        train_start = time.time()
+        # train_start = time.time()
 
-        # Create sampling rng
+        # # Create sampling rng
         rng, input_rng = jax.random.split(rng)
 
-        # Generate an epoch by shuffling sampling indices from the train dataset
-        train_loader = data_loader(input_rng, train_dataset, train_batch_size, shuffle=True)
-        steps_per_epoch = len(train_dataset) // train_batch_size
-        # train
-        for step in tqdm(range(steps_per_epoch), desc="Training...", position=1, leave=False):
-            batch = next(train_loader)
-            state, train_metric = p_train_step(state, batch)
-            train_metrics.append(train_metric)
+        # # Generate an epoch by shuffling sampling indices from the train dataset
+        # train_loader = data_loader(input_rng, train_dataset, train_batch_size, shuffle=True)
+        # steps_per_epoch = len(train_dataset) // train_batch_size
+        # # train
+        # for step in tqdm(range(steps_per_epoch), desc="Training...", position=1, leave=False):
+        #     batch = next(train_loader)
+        #     state, train_metric = p_train_step(state, batch)
+        #     train_metrics.append(train_metric)
 
-            cur_step = epoch * (len(train_dataset) // train_batch_size) + step
+        #     cur_step = epoch * (len(train_dataset) // train_batch_size) + step
 
-            if cur_step % training_args.logging_steps == 0 and cur_step > 0:
-                # Save metrics
-                train_metric = unreplicate(train_metric)
-                train_time += time.time() - train_start
-                if has_tensorboard and jax.process_index() == 0:
-                    write_train_metric(summary_writer, train_metrics, train_time, cur_step)
+        #     if cur_step % training_args.logging_steps == 0 and cur_step > 0:
+        #         # Save metrics
+        #         train_metric = unreplicate(train_metric)
+        #         train_time += time.time() - train_start
+        #         if has_tensorboard and jax.process_index() == 0:
+        #             write_train_metric(summary_writer, train_metrics, train_time, cur_step)
 
-                epochs.write(
-                    f"Step... ({cur_step} | Loss: {train_metric['loss'].mean()}, Learning Rate: {train_metric['learning_rate'].mean()})"
-                )
+        #         epochs.write(
+        #             f"Step... ({cur_step} | Loss: {train_metric['loss'].mean()}, Learning Rate: {train_metric['learning_rate'].mean()})"
+        #         )
 
-                train_metrics = []
+        #         train_metrics = []
 
         # ======================== Evaluating ==============================
         eval_metrics = []
@@ -598,7 +598,9 @@ def main():
         for _ in tqdm(range(eval_steps), desc="Evaluating...", position=2, leave=False):
             # Model forward
             batch = next(eval_loader)
+            print("batch shape---",batch["input_ids"].shape)
             metrics = p_eval_step(state.params, batch)
+            print(metrics)
             eval_metrics.append(metrics)
         
         print(">>>>>>>>>>>",eval_metrics)
