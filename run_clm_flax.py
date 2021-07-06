@@ -600,7 +600,8 @@ def main():
             batch = next(eval_loader)
             metrics = p_eval_step(state.params, batch)
             eval_metrics.append(metrics)
-
+        
+        print(">>>>>>>>>>>",eval_metrics)
         # normalize eval metrics
         eval_metrics = get_metrics(eval_metrics)
 
