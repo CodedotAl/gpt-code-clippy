@@ -36,6 +36,7 @@ from tqdm import tqdm
 
 import jax
 import jax.numpy as jnp
+import jax.profiler
 import optax
 import transformers
 from flax import jax_utils, traverse_util
@@ -350,6 +351,14 @@ def main():
             config, seed=training_args.seed, dtype=getattr(jnp, model_args.dtype)
         )
 
+    # Convert weights to bf16 manually
+    # TODO: remove when .from_pretrained handles it properly
+    def to_bf16(t):
+        return jax.tree_map(lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x, t)
+
+    if model_args.dtype == "bfloat16":
+        model.params = to_bf16(model.params)
+
     # Preprocessing the datasets.
     # First we tokenize all the texts.
     if training_args.do_train:
@@ -492,18 +501,21 @@ def main():
         }
         return traverse_util.unflatten_dict(flat_mask)
 
-    # create adam optimizer
-    adamw = optax.adamw(
-        learning_rate=linear_decay_lr_schedule_fn,
-        b1=training_args.adam_beta1,
-        b2=training_args.adam_beta2,
-        eps=training_args.adam_epsilon,
-        weight_decay=training_args.weight_decay,
-        mask=decay_mask_fn,
-    )
+    # create optimizer
+    if training_args.adafactor:
+        optimizer = optax.adafactor(3e-4)
+    else:
+        optimizer = optax.adamw(
+            learning_rate=linear_decay_lr_schedule_fn,
+            b1=training_args.adam_beta1,
+            b2=training_args.adam_beta2,
+            eps=training_args.adam_epsilon,
+            weight_decay=training_args.weight_decay,
+            mask=decay_mask_fn,
+        )
 
     # Setup train state
-    state = TrainState.create(apply_fn=model.__call__, params=model.params, tx=adamw, dropout_rng=dropout_rng)
+    state = TrainState.create(apply_fn=model.__call__, params=model.params, tx=optimizer, dropout_rng=dropout_rng)
 
     def loss_fn(logits, labels):
         shift_logits = logits[..., :-1, :]
@@ -556,6 +568,9 @@ def main():
     logger.info(f"  Instantaneous batch size per device = {training_args.per_device_train_batch_size}")
     logger.info(f"  Total train batch size (w. parallel & distributed) = {train_batch_size}")
     logger.info(f"  Total optimization steps = {total_train_steps}")
+
+    if not training_args.skip_memory_metrics:
+        server = jax.profiler.start_server(9999)
 
     train_time = 0
     train_metrics = []
