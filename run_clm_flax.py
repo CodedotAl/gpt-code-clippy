@@ -594,7 +594,9 @@ def main():
         # ======================== Evaluating ==============================
         eval_metrics = []
         eval_loader = data_loader(input_rng, eval_dataset, eval_batch_size)
+        print(len(eval_dataset), eval_batch_size)
         eval_steps = len(eval_dataset) // eval_batch_size
+        print('eval_steps---',eval_steps)
         for _ in tqdm(range(eval_steps), desc="Evaluating...", position=2, leave=False):
             # Model forward
             batch = next(eval_loader)
