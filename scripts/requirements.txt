@@ -1,0 +1,10 @@
+requests
+tqdm
+joblib
+fire
+python-magic
+pandas
+numpy
+fastcore
+gdown
+lm_dataformat
