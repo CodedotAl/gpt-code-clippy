@@ -160,6 +160,10 @@ class DataTrainingArguments:
             default='text',
             metadata={"help": "Column containing main text data."},
         )
+    gradient_accumulation_steps: Optional[int] = field(
+        default = 128,
+        metadata= {"help: Value for Gradient Accumulator"}
+    )
 
     def __post_init__(self):
         if self.dataset_name is None and self.train_file is None and self.validation_file is None:
@@ -218,7 +222,11 @@ def write_eval_metric(summary_writer, eval_metrics, step):
     for metric_name, value in eval_metrics.items():
         summary_writer.scalar(f"eval_{metric_name}", value, step)
 
-
+def determine_train_batch_size(args):
+    args.train_batch_size = int(args.train_batch_size
+                                / args.gradient_accumulation_steps)
+    
+    
 def create_learning_rate_fn(
     train_ds_size: int, train_batch_size: int, num_train_epochs: int, num_warmup_steps: int, learning_rate: float
 ) -> Callable[[int], jnp.array]:
