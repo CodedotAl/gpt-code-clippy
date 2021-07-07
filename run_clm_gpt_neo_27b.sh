@@ -18,4 +18,5 @@
     --weight_decay="0.01" \
     --overwrite_output_dir \
     --num_train_epochs="1" \
-    --push_to_hub="False"
+    --push_to_hub="False" \
+    --gradient_accumulation_steps="128"
