@@ -35,6 +35,7 @@ from datasets import Dataset, load_dataset
 from tqdm import tqdm
 
 import jax
+import jax.profiler
 import jax.numpy as jnp
 import optax
 import transformers
@@ -54,6 +55,7 @@ from transformers import (
 )
 from transformers.testing_utils import CaptureLogger
 
+from importlib.util import find_spec
 
 logger = logging.getLogger(__name__)
 
@@ -230,6 +232,9 @@ def create_learning_rate_fn(
     schedule_fn = optax.join_schedules(schedules=[warmup_fn, decay_fn], boundaries=[num_warmup_steps])
     return schedule_fn
 
+# utils
+def mb_item(x):
+    return x.item() if hasattr(x, "item") else x
 
 def main():
     # See all possible arguments in src/transformers/training_args.py
@@ -456,6 +461,23 @@ def main():
             "Unable to display metrics through TensorBoard because the package is not installed: "
             "Please run pip install tensorboard to enable."
         )
+    
+    # enable wandb tracking
+    has_wandb = find_spec("wandb") is not None 
+    if jax.process_index() == 0 and has_wandb and "wandb" in training_args.report_to:
+        try:
+            import wandb
+            wandb.init(
+                entity="wandb", 
+                project="hf-flax-gpt-neo-copilot",
+                sync_tensorboard=True
+            )
+            wandb.config.update(training_args)
+            wandb.config.update(model_args)
+            wandb.config.update(data_args)
+        except ImportError as e:
+            print(e)
+            has_wandb = False
 
     # Initialize our training
     rng = jax.random.PRNGKey(training_args.seed)
@@ -492,18 +514,25 @@ def main():
         }
         return traverse_util.unflatten_dict(flat_mask)
 
-    # create adam optimizer
-    adamw = optax.adamw(
-        learning_rate=linear_decay_lr_schedule_fn,
-        b1=training_args.adam_beta1,
-        b2=training_args.adam_beta2,
-        eps=training_args.adam_epsilon,
-        weight_decay=training_args.weight_decay,
-        mask=decay_mask_fn,
-    )
+    # create optimizer
+    if training_args.adafactor:
+        # We use the default parameters here to initialize adafactor,
+        # For more details about the parameters please check https://github.com/deepmind/optax/blob/ed02befef9bf81cbbf236be3d2b0e032e9ed4a40/optax/_src/alias.py#L74
+        optimizer = optax.adafactor(
+            learning_rate=linear_decay_lr_schedule_fn,
+        )
+    else:
+        optimizer = optax.adamw(
+            learning_rate=linear_decay_lr_schedule_fn,
+            b1=training_args.adam_beta1,
+            b2=training_args.adam_beta2,
+            eps=training_args.adam_epsilon,
+            weight_decay=training_args.weight_decay,
+            mask=decay_mask_fn,
+        )
 
     # Setup train state
-    state = TrainState.create(apply_fn=model.__call__, params=model.params, tx=adamw, dropout_rng=dropout_rng)
+    state = TrainState.create(apply_fn=model.__call__, params=model.params, tx=optimizer, dropout_rng=dropout_rng)
 
     def loss_fn(logits, labels):
         shift_logits = logits[..., :-1, :]
@@ -557,14 +586,18 @@ def main():
     logger.info(f"  Total train batch size (w. parallel & distributed) = {train_batch_size}")
     logger.info(f"  Total optimization steps = {total_train_steps}")
 
+    if not training_args.skip_memory_metrics:
+        server = jax.profiler.start_server(9999)
+
     train_time = 0
     train_metrics = []
+    # TODO: figure out training duration
     epochs = tqdm(range(num_epochs), desc=f"Epoch ... (1/{num_epochs})", position=0)
     for epoch in epochs:
         # ======================== Training ================================
         train_start = time.time()
 
-        # # Create sampling rng
+        # Create sampling rng
         rng, input_rng = jax.random.split(rng)
 
         # Generate an epoch by shuffling sampling indices from the train dataset
@@ -584,6 +617,10 @@ def main():
                 train_time += time.time() - train_start
                 if has_tensorboard and jax.process_index() == 0:
                     write_train_metric(summary_writer, train_metrics, train_time, cur_step)
+                if has_wandb and jax.process_index() == 0:
+                    # TODO: add accumulation of metrics
+                    _metrics = {k if k=="learning_rate" else f"train_{k}":mb_item(v.mean()) for k, v in train_metric.items()}
+                    wandb.log({"training_step":cur_step, **_metrics}, commit=True)
 
                 epochs.write(
                     f"Step... ({cur_step} | Loss: {train_metric['loss'].mean()}, Learning Rate: {train_metric['learning_rate'].mean()})"
@@ -591,45 +628,49 @@ def main():
 
                 train_metrics = []
 
-        # ======================== Evaluating ==============================
-        eval_metrics = []
-        eval_loader = data_loader(input_rng, eval_dataset, eval_batch_size)
-        eval_steps = len(eval_dataset) // eval_batch_size
-        for _ in tqdm(range(eval_steps), desc="Evaluating...", position=2, leave=False):
-            # Model forward
-            batch = next(eval_loader)
-            metrics = p_eval_step(state.params, batch)
-            eval_metrics.append(metrics)
-        
-        # normalize eval metrics
-        eval_metrics = get_metrics(eval_metrics)
+            if cur_step % training_args.eval_steps == 0 and cur_step > 0:
+                # ======================== Evaluating ==============================
+                eval_metrics = []
+                eval_loader = data_loader(input_rng, eval_dataset, eval_batch_size)
+                eval_steps = len(eval_dataset) // eval_batch_size
+                for _ in tqdm(range(eval_steps), desc="Evaluating...", position=2, leave=False):
+                    # Model forward
+                    batch = next(eval_loader)
+                    metrics = p_eval_step(state.params, batch)
+                    eval_metrics.append(metrics)
 
-        eval_metrics = jax.tree_map(jnp.mean, eval_metrics)
+                # normalize eval metrics
+                eval_metrics = get_metrics(eval_metrics)
+                eval_metrics = jax.tree_map(jnp.mean, eval_metrics)
 
-        try:
-            eval_metrics["perplexity"] = math.exp(eval_metrics["loss"])
-        except OverflowError:
-            eval_metrics["perplexity"] = float("inf")
+                try:
+                    eval_metrics["perplexity"] = math.exp(eval_metrics["loss"])
+                except OverflowError:
+                    eval_metrics["perplexity"] = float("inf")
 
-        # Print metrics and update progress bar
-        desc = f"Epoch... ({epoch + 1}/{num_epochs} | Eval Loss: {eval_metrics['loss']} | Eval Perplexity: {eval_metrics['perplexity']})"
-        epochs.write(desc)
-        epochs.desc = desc
+                # Print metrics and update progress bar
+                desc = f"Step... ({cur_step} | Eval Loss: {eval_metrics['loss']} | Eval Perplexity: {eval_metrics['perplexity']})"
+                epochs.write(desc)
+                epochs.desc = desc
 
-        # Save metrics
-        if has_tensorboard and jax.process_index() == 0:
-            cur_step = epoch * (len(train_dataset) // train_batch_size)
-            write_eval_metric(summary_writer, eval_metrics, cur_step)
+                # Save metrics
+                if has_tensorboard and jax.process_index() == 0:
+                    # cur_step = epoch * (len(train_dataset) // train_batch_size)
+                    write_eval_metric(summary_writer, eval_metrics, cur_step)
+                if has_wandb and jax.process_index() == 0:
+                    _metrics = {f"eval_{k}":mb_item(v) for k, v in eval_metrics.items()}
+                    wandb.log({"eval_step":cur_step, **_metrics})
 
-        # save checkpoint after each epoch and push checkpoint to the hub
-        if jax.process_index() == 0:
-            params = jax.device_get(unreplicate(state.params))
-            model.save_pretrained(
-                training_args.output_dir,
-                params=params,
-                push_to_hub=training_args.push_to_hub,
-                commit_message=f"Saving weights and logs of epoch {epoch+1}",
-            )
+            if cur_step % training_args.save_steps == 0 and cur_step > 0:
+                # save checkpoint after each epoch and push checkpoint to the hub
+                if jax.process_index() == 0:
+                    params = jax.device_get(unreplicate(state.params))
+                    model.save_pretrained(
+                        training_args.output_dir,
+                        params=params,
+                        push_to_hub=training_args.push_to_hub,
+                        commit_message=f"Saving weights and logs of step {cur_step}",
+                    )
 
 
 if __name__ == "__main__":
