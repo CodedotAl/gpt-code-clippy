@@ -25,4 +25,5 @@
     --skip_memory_metrics="False" \
     # --max_train_samples="10000" \
     # --max_eval_samples="1000"
+    --resume_from_checkpoint="False"
     
