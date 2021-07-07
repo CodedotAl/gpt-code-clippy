@@ -236,6 +236,37 @@ def create_learning_rate_fn(
 def mb_item(x):
     return x.item() if hasattr(x, "item") else x
 
+#checkpoint functions
+def save_checkpoint(model, save_dir, state):
+        state = jax_utils.unreplicate(state)
+        print(f"SAVING CHECKPOINT IN {save_dir}", end=" ... ")
+        model.save_pretrained(
+            training_args.output_dir,
+            params=state.params,
+            push_to_hub=training_args.push_to_hub,
+            commit_message=f"Saving weights and logs of epoch {epoch+1}",
+        )
+        with open(os.path.join(save_dir, "opt_state.msgpack"), "wb") as f:
+            f.write(to_bytes(state.opt_state))
+        with open(os.path.join(save_dir, "training_state.json"), "w") as f:
+            json.dump({"step": state.step.item()}, f)
+        print("checkpoint saved")
+        
+def restore_checkpoint(save_dir, state):
+    print(f"RESTORING CHECKPOINT FROM {save_dir}", end=" ... ")
+    with open(os.path.join(save_dir, "flax_model.msgpack"), "rb") as f:
+        params = from_bytes(state.params, f.read())
+
+    with open(os.path.join(save_dir, "opt_state.msgpack"), "rb") as f:
+        opt_state = from_bytes(state.opt_state, f.read())
+
+    with open(os.path.join(save_dir, "training_state.json"), "r") as f:
+        training_state = json.load(f)
+    step = training_state["step"]
+
+    print("checkpoint restored")
+    return params, opt_state, step
+
 def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
@@ -530,9 +561,12 @@ def main():
             weight_decay=training_args.weight_decay,
             mask=decay_mask_fn,
         )
-
+        
     # Setup train state
     state = TrainState.create(apply_fn=model.__call__, params=model.params, tx=optimizer, dropout_rng=dropout_rng)
+    
+    if training_args.resume_from_checkpoint:
+        params, opt_state, step = restore_checkpoint(model_args.model_name_or_path, state)
 
     def loss_fn(logits, labels):
         shift_logits = logits[..., :-1, :]
@@ -664,13 +698,8 @@ def main():
             if cur_step % training_args.save_steps == 0 and cur_step > 0:
                 # save checkpoint after each epoch and push checkpoint to the hub
                 if jax.process_index() == 0:
-                    params = jax.device_get(unreplicate(state.params))
-                    model.save_pretrained(
-                        training_args.output_dir,
-                        params=params,
-                        push_to_hub=training_args.push_to_hub,
-                        commit_message=f"Saving weights and logs of step {cur_step}",
-                    )
+                    save_checkpoint(model, training_args.output_dir, state)
+
 
 
 if __name__ == "__main__":
