@@ -55,6 +55,7 @@ from transformers import (
 )
 from transformers.testing_utils import CaptureLogger
 
+from importlib.util import find_spec
 
 logger = logging.getLogger(__name__)
 
@@ -231,6 +232,9 @@ def create_learning_rate_fn(
     schedule_fn = optax.join_schedules(schedules=[warmup_fn, decay_fn], boundaries=[num_warmup_steps])
     return schedule_fn
 
+# utils
+def mb_item(x):
+    return x.item() if hasattr(x, "item") else x
 
 def main():
     # See all possible arguments in src/transformers/training_args.py
@@ -457,6 +461,23 @@ def main():
             "Unable to display metrics through TensorBoard because the package is not installed: "
             "Please run pip install tensorboard to enable."
         )
+    
+    # enable wandb tracking
+    has_wandb = find_spec("wandb") is not None 
+    if jax.process_index() == 0 and has_wandb and "wandb" in training_args.report_to:
+        try:
+            import wandb
+            wandb.init(
+                entity="wandb", 
+                project="hf-flax-gpt-neo-copilot",
+                sync_tensorboard=True
+            )
+            wandb.config.update(training_args)
+            wandb.config.update(model_args)
+            wandb.config.update(data_args)
+        except ImportError as e:
+            print(e)
+            has_wandb = False
 
     # Initialize our training
     rng = jax.random.PRNGKey(training_args.seed)
@@ -570,6 +591,7 @@ def main():
 
     train_time = 0
     train_metrics = []
+    # TODO: figure out training duration
     epochs = tqdm(range(num_epochs), desc=f"Epoch ... (1/{num_epochs})", position=0)
     for epoch in epochs:
         # ======================== Training ================================
@@ -595,6 +617,10 @@ def main():
                 train_time += time.time() - train_start
                 if has_tensorboard and jax.process_index() == 0:
                     write_train_metric(summary_writer, train_metrics, train_time, cur_step)
+                if has_wandb and jax.process_index() == 0:
+                    # TODO: add accumulation of metrics
+                    _metrics = {k if k=="learning_rate" else f"train_{k}":mb_item(v.mean()) for k, v in train_metric.items()}
+                    wandb.log({"training_step":cur_step, **_metrics}, commit=True)
 
                 epochs.write(
                     f"Step... ({cur_step} | Loss: {train_metric['loss'].mean()}, Learning Rate: {train_metric['learning_rate'].mean()})"
@@ -629,8 +655,11 @@ def main():
 
                 # Save metrics
                 if has_tensorboard and jax.process_index() == 0:
-                    cur_step = epoch * (len(train_dataset) // train_batch_size)
+                    # cur_step = epoch * (len(train_dataset) // train_batch_size)
                     write_eval_metric(summary_writer, eval_metrics, cur_step)
+                if has_wandb and jax.process_index() == 0:
+                    _metrics = {f"eval_{k}":mb_item(v) for k, v in eval_metrics.items()}
+                    wandb.log({"eval_step":cur_step, **_metrics})
 
             if cur_step % training_args.save_steps == 0 and cur_step > 0:
                 # save checkpoint after each epoch and push checkpoint to the hub
