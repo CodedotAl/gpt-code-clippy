@@ -35,6 +35,7 @@ from datasets import Dataset, load_dataset
 from tqdm import tqdm
 
 import jax
+import jax.profiler
 import jax.numpy as jnp
 import optax
 import transformers
