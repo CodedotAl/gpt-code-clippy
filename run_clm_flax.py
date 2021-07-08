@@ -241,21 +241,21 @@ def mb_item(x):
 
 #checkpoint functions
 def save_checkpoint(model, save_dir, state, with_opt:bool=True, push_to_hub:bool=False):
-        state = jax_utils.unreplicate(state)
-        print(f"SAVING CHECKPOINT IN {save_dir}", end=" ... ")
-        save_dir = f"{save_dir}/ckpt-{mb_item(state.step)-1}"
-        model.save_pretrained(
-            save_dir,
-            params=state.params,
-            push_to_hub=push_to_hub,
-            commit_message=f"Saving weights and logs at step {mb_item(state.step)}",
-        )
-        if with_opt:
-            with open(os.path.join(save_dir, "opt_state.msgpack"), "wb") as f:
-                f.write(to_bytes(state.opt_state))
-            with open(os.path.join(save_dir, "training_state.json"), "w") as f:
-                json.dump({"step": state.step.item()}, f)
-        print("checkpoint saved")
+    state = jax_utils.unreplicate(state)
+    print(f"SAVING CHECKPOINT IN {save_dir}", end=" ... ")
+    save_dir = f"{save_dir}/ckpt-{mb_item(state.step)-1}"
+    model.save_pretrained(
+        save_dir,
+        params=state.params,
+        push_to_hub=push_to_hub,
+        commit_message=f"Saving weights and logs at step {mb_item(state.step)}",
+    )
+    if with_opt:
+        with open(os.path.join(save_dir, "opt_state.msgpack"), "wb") as f:
+            f.write(to_bytes(state.opt_state))
+        with open(os.path.join(save_dir, "training_state.json"), "w") as f:
+            json.dump({"step": state.step.item()}, f)
+    print("checkpoint saved")
         
 def restore_checkpoint(save_dir, state):
     print(f"RESTORING CHECKPOINT FROM {save_dir}", end=" ... ")
