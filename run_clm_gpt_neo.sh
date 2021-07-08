@@ -26,7 +26,7 @@
     --skip_memory_metrics="True" \
     --save_steps="200" \
     --save_total_limit 2 \
-    --gradient_accumulation_steps 4 \
+    --gradient_accumulation_steps 1 \
     # --resume_from_checkpoint $HOME/gpt-neo-125M-code-clippy/ckpt_201 \
     # --max_train_samples="10000" \
     # --max_eval_samples="1000"

@@ -242,23 +242,23 @@ def mb_item(x):
 #checkpoint functions
 def save_checkpoint(model, save_dir, state, with_opt:bool=True, push_to_hub:bool=False):
     state = jax_utils.unreplicate(state)
-    print(f"SAVING CHECKPOINT IN {save_dir}", end=" ... ")
+    logger.info(f"SAVING CHECKPOINT IN {save_dir}", end=" ... ")
     save_dir = f"{save_dir}/ckpt-{mb_item(state.step)-1}"
     model.save_pretrained(
         save_dir,
         params=state.params,
         push_to_hub=push_to_hub,
-        commit_message=f"Saving weights and logs at step {mb_item(state.step)}",
+        commit_message=f"Saving weights and logs at step {mb_item(state.step)-1}",
     )
     if with_opt:
         with open(os.path.join(save_dir, "opt_state.msgpack"), "wb") as f:
             f.write(to_bytes(state.opt_state))
         with open(os.path.join(save_dir, "training_state.json"), "w") as f:
             json.dump({"step": state.step.item()}, f)
-    print("checkpoint saved")
+    logger.info("checkpoint saved")
         
 def restore_checkpoint(save_dir, state):
-    print(f"RESTORING CHECKPOINT FROM {save_dir}", end=" ... ")
+    logger.info(f"RESTORING CHECKPOINT FROM {save_dir}", end=" ... ")
     with open(os.path.join(save_dir, "flax_model.msgpack"), "rb") as f:
         params = from_bytes(state.params, f.read())
 
@@ -269,7 +269,7 @@ def restore_checkpoint(save_dir, state):
         training_state = json.load(f)
     step = training_state["step"]
 
-    print("checkpoint restored")
+    logger.info("checkpoint restored")
     return state.replace(step=step, params=params, opt_state=opt_state), step
 
 def rotate_checkpoints(ckpt_dir:str, save_total_limit:int):
@@ -728,9 +728,11 @@ def main():
                 # save checkpoint after each epoch and push checkpoint to the hub
                 if jax.process_index() == 0:
                     save_checkpoint(model, training_args.output_dir, state, push_to_hub=training_args.push_to_hub)
-                    rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
+                    if training_args.save_total_limit is not None:
+                        rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
+    
     # save model after training is over
-    save_checkpoint(model, training_args.output_dir, state, push_to_hub=training_args.push_to_hub)
+    save_checkpoint(model, training_args.output_dir, state, with_opt=False, push_to_hub=training_args.push_to_hub)
 
 
 
