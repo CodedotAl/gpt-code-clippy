@@ -18,4 +18,5 @@
     --weight_decay="0.01" \
     --overwrite_output_dir \
     --num_train_epochs="1" \
-    --push_to_hub="False"
+    --push_to_hub="False" \
+    --resume_from_checkpoint="False"
