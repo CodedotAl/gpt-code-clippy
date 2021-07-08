@@ -19,11 +19,12 @@
     --overwrite_output_dir \
     --num_train_epochs="1" \
     --logging_steps="100" \
-    --eval_steps="100" \
+    --eval_steps="200" \
     --push_to_hub="False" \
+    --report_to="all" \
     --dtype="bfloat16" \
-    --skip_memory_metrics="False" \
+    --skip_memory_metrics="True" \
+    --save_steps="200" \
+    #--resume_from_checkpoint $HOME/gpt-neo-125M-code-clippy/ckpt_201 \
     # --max_train_samples="10000" \
     # --max_eval_samples="1000"
-    --resume_from_checkpoint="False"
-    
