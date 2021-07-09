@@ -33,6 +33,7 @@ from typing import Callable, Optional
 import json
 import shutil
 from collections import defaultdict
+import numpy as np
 # from queue import Queue
 # import threading
 from multiprocessing import Process, Queue
@@ -173,6 +174,7 @@ class DataTrainingArguments:
     )
     num_train_steps: int = field(default=50000, metadata={"help": "The number of training steps."})
     num_eval_samples: int = field(default=50000, metadata={"help": "The number of samples to be used for evaluation"})
+    prefetch_buffer: int = field(default=8, metadata={"help": "The number of batches to prefetch for loading"})
 
     def __post_init__(self):
         if self.dataset_name is None and self.train_file is None and self.validation_file is None:
@@ -277,7 +279,7 @@ def make_batch(samples):
 #             self.rem = {k:v[-max_length:] for k,v in sample.items()}
 #             sample = {k:v[:max_length] for k,v in sample.items()}
 #             # regroup to shape [bs x seq_len]
-#             samples = {k:[v[i*self.seq_len:(i+1)*self.seq_len] for i in range(self.bs)] for k,v in sample.items()}
+#             samples = {k:np.array([v[i*self.seq_len:(i+1)*self.seq_len] for i in range(self.bs)]) for k,v in sample.items()}
             
 #             self.queue.put(make_batch(samples))
     
@@ -324,7 +326,7 @@ class PrefetchDataloader(Process):
             self.rem = {k:v[-max_length:] for k,v in sample.items()}
             sample = {k:v[:max_length] for k,v in sample.items()}
             # regroup to shape [bs x seq_len]
-            samples = {k:[v[i*self.seq_len:(i+1)*self.seq_len] for i in range(self.bs)] for k,v in sample.items()}
+            samples = {k:np.array([v[i*self.seq_len:(i+1)*self.seq_len] for i in range(self.bs)]) for k,v in sample.items()}
             
             self.queue.put(samples)
     
@@ -625,7 +627,8 @@ def main():
     train_dl = PrefetchDataloader(
         tokenized_dataset, 
         int(training_args.per_device_train_batch_size) * jax.device_count(),
-        block_size, 
+        block_size,
+        prefetch_buffer=data_args.prefetch_buffer,
         seed=shuffle_seed
     )
     # evaluation data is not in streaming mode
@@ -806,11 +809,10 @@ def main():
         if cur_step < resume_step:
             continue
         
-        try:
-            batch = shard(next(train_dl))
-        except TypeError as e:
-            print(e)
-            continue
+        # samples = advance_iter_and_group_samples(iter(tokenized_dataset), int(training_args.per_device_train_batch_size) * jax.device_count(), block_size)
+        # batch = shard(make_batch(samples))
+        batch = shard(next(train_dl))
+        # logger.info(f"{batch['input_ids'].shape}")
         state, train_metric = p_train_step(state, batch)
         train_metrics.append(train_metric)
         if step % grad_accum_steps == 0:
@@ -881,3 +883,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
