@@ -21,6 +21,7 @@ https://huggingface.co/models?filter=causal-lm
 """
 # You can also adapt this script on your own causal language modeling task. Pointers for this are left as comments.
 
+from ast import Str
 import logging
 import math
 import os
@@ -31,7 +32,8 @@ from pathlib import Path
 from typing import Callable, Optional
 import json
 import shutil
-
+from collections import defaultdict
+from queue import Queue
 import datasets
 from datasets import Dataset, load_dataset
 from tqdm import tqdm
@@ -121,6 +123,7 @@ class DataTrainingArguments:
         default=None,
         metadata={"help": "An optional input evaluation data file to evaluate the perplexity on (a text file)."},
     )
+    data_dir: Optional[str] = field(default=None, metadata={"help": "Path to data directory."})
     max_train_samples: Optional[int] = field(
         default=None,
         metadata={
@@ -226,6 +229,64 @@ def advance_iter_and_group_samples(train_iterator, num_samples, max_seq_length):
 
     grouped_samples = group_texts(samples)
     return grouped_samples
+
+def make_batch(samples):
+    batch = {k:jnp.array(v) for k,v in samples.items()}
+    batch['labels'] = batch['input_ids'].copy()
+    return batch
+
+class PrefetchDataloader():
+    "Prefetch dataloader for IterableDataset"
+    def __init__(self, dataset, batch_size, sequence_length, prefetch_buffer=1, shuffle=True, shuffle_buffer=1000, seed=0):
+        self.bs = batch_size
+        self.seq_len = sequence_length
+        self.max_length = batch_size * sequence_length
+        self.prefetch_buffer = prefetch_buffer
+        self.shuffle = shuffle
+        self.shuffle_buffer = shuffle_buffer
+        self.seed = seed
+        self.dataset = dataset
+        self.make_iter()
+        self.queue = Queue(prefetch_buffer)
+        self.rem = defaultdict(list)
+        self.prefetch()
+        
+        
+    def next(self):
+        batch = self.queue.get()
+        self.prefetch()
+        return batch
+    
+    def make_iter(self):
+        if self.shuffle:
+            shuffled_dataset = self.dataset.shuffle(self.shuffle_buffer, seed=self.seed)
+            self.seed += 1
+            self.ds_iter = iter(shuffled_dataset)
+        else:
+            self.ds_iter = iter(self.dataset)
+
+    def prefetch(self):
+        while not self.queue.full():
+            # prepair next batch
+            sample = self.rem.copy()
+            l = len(sample["input_ids"])
+            max_length = self.max_length
+            while l < max_length:
+                try:
+                    next_sample = next(self.ds_iter)
+                except StopIteration:
+                    self.make_iter()
+                    next_sample = next(self.ds_iter)
+                l += len(next_sample["input_ids"])
+                sample = {k:sample[k]+next_sample[k] for k in next_sample.keys()}
+            
+            self.rem = {k:v[-max_length:] for k,v in sample.items()}
+            sample = {k:v[:max_length] for k,v in sample.items()}
+            # regroup to shape [bs x seq_len]
+            samples = {k:[v[i*self.seq_len:(i+1)*self.seq_len] for i in range(self.bs)] for k,v in sample.items()}
+            
+            self.queue.put(make_batch(samples))
+
 
 def data_loader(rng: jax.random.PRNGKey, dataset: Dataset, batch_size: int, shuffle: bool = False):
     """
@@ -379,10 +440,17 @@ def main():
     if data_args.dataset_name is not None:
         # Downloading and loading a dataset from the hub.
         dataset = load_dataset(
-            data_args.dataset_name, 
-            data_args.dataset_config_name, 
+            data_args.dataset_name,
+            data_dir=data_args.data_dir,
             cache_dir=model_args.cache_dir, 
             streaming=True,
+            split="train"
+        )
+        eval_dataset = load_dataset(
+            data_args.dataset_name,
+            data_dir=data_args.data_dir,
+            cache_dir=model_args.cache_dir, 
+            split="validation"
         )
         
     # See more about loading any type of standard or custom dataset (from files, python dict, pandas DataFrame, etc) at
@@ -426,6 +494,7 @@ def main():
 
     # Preprocessing the datasets.
     # First we tokenize all the texts.
+    column_names = dataset.features.keys()
     text_column_name = data_args.text_column_name if data_args.text_column_name in column_names else column_names[0]
 
     # since this will be pickled to avoid _LazyModule error in Hasher force logger loading before tokenize_function
@@ -441,7 +510,11 @@ def main():
             )
         return output
 
-    tokenized_dataset = dataset.map(
+    tokenized_dataset = train_dataset.map(
+        tokenize_function,
+        batched=True,
+    )
+    tokenized_eval_dataset = eval_dataset.map(
         tokenize_function,
         batched=True,
     )
@@ -463,20 +536,20 @@ def main():
         block_size = min(data_args.block_size, tokenizer.model_max_length)
 
     # # Main data processing function that will concatenate all texts from our dataset and generate chunks of block_size.
-    # def group_texts(examples):
-    #     # Concatenate all texts.
-    #     concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
-    #     total_length = len(concatenated_examples[list(examples.keys())[0]])
-    #     # We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
-    #     # customize this part to your needs.
-    #     total_length = (total_length // block_size) * block_size
-    #     # Split by chunks of max_len.
-    #     result = {
-    #         k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
-    #         for k, t in concatenated_examples.items()
-    #     }
-    #     result["labels"] = result["input_ids"].copy()
-    #     return result
+    def group_texts(examples):
+        # Concatenate all texts.
+        concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
+        total_length = len(concatenated_examples[list(examples.keys())[0]])
+        # We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
+        # customize this part to your needs.
+        total_length = (total_length // block_size) * block_size
+        # Split by chunks of max_len.
+        result = {
+            k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
+            for k, t in concatenated_examples.items()
+        }
+        result["labels"] = result["input_ids"].copy()
+        return result
 
     # Note that with `batched=True`, this map processes 1,000 texts together, so group_texts throws away a remainder
     # for each of those groups of 1,000 texts. You can adjust that batch_size here but a higher value might be slower
@@ -500,13 +573,11 @@ def main():
             train_dataset = train_dataset.take(range(data_args.max_train_samples))
         train_dataset = train_dataset.shuffle(buffer_size=data_args.shuffle_buffer_size, seed=shuffle_seed)
         train_iter = iter(train_dataset)
+    # evaluation data is not in streaming mode
     if training_args.do_eval:
-        if "validation" not in tokenized_dataset:
-            raise ValueError("--do_eval requires a validation dataset")
-        eval_dataset = iter(tokenized_dataset["validation"])
+        eval_dataset = tokenized_eval_dataset.map(group_texts, batched=True)
         if data_args.max_eval_samples is not None:
-            eval_dataset = eval_dataset.take(range(data_args.max_eval_samples))
-        eval_iter = iter(eval_dataset)
+            eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
     
     # Enable tensorboard only on the master node
     has_tensorboard = is_tensorboard_available()
@@ -668,7 +739,8 @@ def main():
     for step in range(total_train_steps):
         # ======================== Training ================================
         train_start = time.time()
-
+        rng, input_rng = jax.random.split(rng)
+        
         try:
             samples = advance_iter_and_group_samples(training_iter, train_batch_size, max_seq_length)
         except StopIteration:
@@ -685,8 +757,8 @@ def main():
         # skip to the step from which we are resuming
         if cur_step < resume_step:
             continue
-        # TODO: resume from here
-        batch = samples
+        
+        batch = make_batch(samples)
         state, train_metric = p_train_step(state, batch)
         train_metrics.append(train_metric)
         if step % grad_accum_steps == 0:
@@ -709,45 +781,45 @@ def main():
 
             train_metrics = []
 
-            if cur_step % (training_args.eval_steps * grad_accum_steps) == 0 and cur_step > 0:
-                # ======================== Evaluating ==============================
-                eval_metrics = []
-                eval_loader = data_loader(input_rng, eval_dataset, eval_batch_size)
-                eval_steps = len(eval_dataset) // eval_batch_size
-                for _ in tqdm(range(eval_steps), desc="Evaluating...", position=2, leave=False):
-                    # Model forward
-                    batch = next(eval_loader)
-                    metrics = p_eval_step(state.params, batch)
-                    eval_metrics.append(metrics)
+        if cur_step % (training_args.eval_steps * grad_accum_steps) == 0 and cur_step > 0:
+            # ======================== Evaluating ==============================
+            eval_metrics = []
+            eval_loader = data_loader(input_rng, eval_dataset, eval_batch_size)
+            eval_steps = len(eval_dataset) // eval_batch_size
+            for _ in tqdm(range(eval_steps), desc="Evaluating...", position=2, leave=False):
+                # Model forward
+                batch = next(eval_loader)
+                metrics = p_eval_step(state.params, batch)
+                eval_metrics.append(metrics)
 
-                # normalize eval metrics
-                eval_metrics = get_metrics(eval_metrics)
-                eval_metrics = jax.tree_map(jnp.mean, eval_metrics)
+            # normalize eval metrics
+            eval_metrics = get_metrics(eval_metrics)
+            eval_metrics = jax.tree_map(jnp.mean, eval_metrics)
 
-                try:
-                    eval_metrics["perplexity"] = math.exp(eval_metrics["loss"])
-                except OverflowError:
-                    eval_metrics["perplexity"] = float("inf")
+            try:
+                eval_metrics["perplexity"] = math.exp(eval_metrics["loss"])
+            except OverflowError:
+                eval_metrics["perplexity"] = float("inf")
 
-                # Print metrics and update progress bar
-                desc = f"Step... ({cur_step} | Eval Loss: {eval_metrics['loss']} | Eval Perplexity: {eval_metrics['perplexity']})"
-                epochs.write(desc)
-                epochs.desc = desc
+            # Print metrics and update progress bar
+            desc = f"Step... ({cur_step} | Eval Loss: {eval_metrics['loss']} | Eval Perplexity: {eval_metrics['perplexity']})"
+            steps.write(desc)
+            steps.desc = desc
 
-                # Save metrics
-                if has_tensorboard and jax.process_index() == 0:
-                    # cur_step = epoch * (len(train_dataset) // train_batch_size)
-                    write_eval_metric(summary_writer, eval_metrics, cur_step)
-                if has_wandb and jax.process_index() == 0 and ("wandb" in training_args.report_to):
-                    _metrics = {f"eval_{k}":mb_item(v) for k, v in eval_metrics.items()}
-                    wandb.log({"eval_step":cur_step, **_metrics})
+            # Save metrics
+            if has_tensorboard and jax.process_index() == 0:
+                # cur_step = epoch * (len(train_dataset) // train_batch_size)
+                write_eval_metric(summary_writer, eval_metrics, cur_step)
+            if has_wandb and jax.process_index() == 0 and ("wandb" in training_args.report_to):
+                _metrics = {f"eval_{k}":mb_item(v) for k, v in eval_metrics.items()}
+                wandb.log({"eval_step":cur_step, **_metrics})
 
-            if cur_step % (training_args.save_steps * grad_accum_steps) == 0 and cur_step > 0:
-                # save checkpoint after each epoch and push checkpoint to the hub
-                if jax.process_index() == 0:
-                    save_checkpoint(model, training_args.output_dir, state, push_to_hub=training_args.push_to_hub)
-                    if training_args.save_total_limit is not None:
-                        rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
+        if cur_step % (training_args.save_steps * grad_accum_steps) == 0 and cur_step > 0:
+            # save checkpoint after each epoch and push checkpoint to the hub
+            if jax.process_index() == 0:
+                save_checkpoint(model, training_args.output_dir, state, push_to_hub=training_args.push_to_hub)
+                if training_args.save_total_limit is not None:
+                    rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
     
     # save model after training is over
     save_checkpoint(model, training_args.output_dir, state, with_opt=False, push_to_hub=training_args.push_to_hub)
