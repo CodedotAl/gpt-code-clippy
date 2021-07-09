@@ -34,6 +34,7 @@ import json
 import shutil
 from collections import defaultdict
 from queue import Queue
+import threading
 import datasets
 from datasets import Dataset, load_dataset
 from tqdm import tqdm
@@ -235,9 +236,10 @@ def make_batch(samples):
     batch['labels'] = batch['input_ids'].copy()
     return batch
 
-class PrefetchDataloader():
+class PrefetchDataloader(threading.Thread):
     "Prefetch dataloader for IterableDataset"
     def __init__(self, dataset, batch_size, sequence_length, prefetch_buffer=1, shuffle=True, shuffle_buffer=1000, seed=0):
+        super().__init__(daemon=True)
         self.bs = batch_size
         self.seq_len = sequence_length
         self.max_length = batch_size * sequence_length
@@ -246,37 +248,29 @@ class PrefetchDataloader():
         self.shuffle_buffer = shuffle_buffer
         self.seed = seed
         self.dataset = dataset
-        self.make_iter()
-        self.queue = Queue(prefetch_buffer)
-        self.rem = defaultdict(list)
-        self.prefetch()
-        
-        
-    def next(self):
-        batch = self.queue.get()
-        self.prefetch()
-        return batch
-    
-    def make_iter(self):
-        if self.shuffle:
-            shuffled_dataset = self.dataset.shuffle(self.shuffle_buffer, seed=self.seed)
+        if shuffle:
+            shuffled_dataset = dataset.shuffle(shuffle_buffer, seed=self.seed)
             self.seed += 1
             self.ds_iter = iter(shuffled_dataset)
         else:
-            self.ds_iter = iter(self.dataset)
-
-    def prefetch(self):
-        while not self.queue.full():
+            self.ds_iter = iter(dataset)
+        self.queue = Queue(prefetch_buffer)
+        self.rem = defaultdict(list)
+        self.start()
+        
+        
+    def __next__(self):
+        batch = self.queue.get()
+        return batch
+        
+    def run(self):
+        while True:
             # prepair next batch
             sample = self.rem.copy()
             l = len(sample["input_ids"])
             max_length = self.max_length
             while l < max_length:
-                try:
-                    next_sample = next(self.ds_iter)
-                except StopIteration:
-                    self.make_iter()
-                    next_sample = next(self.ds_iter)
+                next_sample = next(self.ds_iter)
                 l += len(next_sample["input_ids"])
                 sample = {k:sample[k]+next_sample[k] for k in next_sample.keys()}
             
@@ -286,6 +280,9 @@ class PrefetchDataloader():
             samples = {k:[v[i*self.seq_len:(i+1)*self.seq_len] for i in range(self.bs)] for k,v in sample.items()}
             
             self.queue.put(make_batch(samples))
+    
+    def __iter__(self):
+        return self
 
 
 def data_loader(rng: jax.random.PRNGKey, dataset: Dataset, batch_size: int, shuffle: bool = False):
@@ -439,7 +436,7 @@ def main():
     # download the dataset.
     if data_args.dataset_name is not None:
         # Downloading and loading a dataset from the hub.
-        dataset = load_dataset(
+        train_dataset = load_dataset(
             data_args.dataset_name,
             data_dir=data_args.data_dir,
             cache_dir=model_args.cache_dir, 
@@ -494,7 +491,7 @@ def main():
 
     # Preprocessing the datasets.
     # First we tokenize all the texts.
-    column_names = dataset.features.keys()
+    column_names = eval_dataset.column_names
     text_column_name = data_args.text_column_name if data_args.text_column_name in column_names else column_names[0]
 
     # since this will be pickled to avoid _LazyModule error in Hasher force logger loading before tokenize_function
@@ -517,6 +514,9 @@ def main():
     tokenized_eval_dataset = eval_dataset.map(
         tokenize_function,
         batched=True,
+        remove_columns=column_names,
+        num_proc=data_args.preprocessing_num_workers,
+        load_from_cache_file=not data_args.overwrite_cache,
     )
 
     if data_args.block_size is None:
@@ -558,24 +558,38 @@ def main():
     # To speed up this part, we use multiprocessing. See the documentation of the map method for more information:
     # https://huggingface.co/docs/datasets/package_reference/main_classes.html#datasets.Dataset.map
 
-    # lm_datasets = tokenized_datasets.map(
-    #     group_texts,
-    #     batched=True,
-    #     num_proc=data_args.preprocessing_num_workers,
-    #     load_from_cache_file=not data_args.overwrite_cache,
-    # )
     shuffle_seed = training_args.seed
-    if training_args.do_train:
-        if "train" not in tokenized_dataset:
-            raise ValueError("--do_train requires a train dataset")
-        train_dataset = tokenized_dataset["train"]
-        if data_args.max_train_samples is not None:
-            train_dataset = train_dataset.take(range(data_args.max_train_samples))
-        train_dataset = train_dataset.shuffle(buffer_size=data_args.shuffle_buffer_size, seed=shuffle_seed)
-        train_iter = iter(train_dataset)
+    # if training_args.do_train:
+    #     if "train" not in tokenized_dataset:
+    #         raise ValueError("--do_train requires a train dataset")
+    #     train_dataset = tokenized_dataset
+    #     if data_args.max_train_samples is not None:
+    #         train_dataset = train_dataset.take(range(data_args.max_train_samples))
+    #     train_dataset = train_dataset.shuffle(buffer_size=data_args.shuffle_buffer_size, seed=shuffle_seed)
+    #     train_iter = iter(train_dataset)
+
+    
+    # Store some constant
+    num_epochs = int(training_args.num_train_epochs)
+    train_batch_size = int(training_args.per_device_train_batch_size) * jax.device_count() * training_args.gradient_accumulation_steps
+    eval_batch_size = int(training_args.per_device_eval_batch_size) * jax.device_count()
+    # steps_per_epoch = len(train_dataset) // train_batch_size
+    total_train_steps = training_args.max_steps
+    
+    train_dl = PrefetchDataloader(
+        tokenized_dataset, 
+        int(training_args.per_device_train_batch_size) * jax.device_count(),
+        block_size, 
+        seed=shuffle_seed
+    )
     # evaluation data is not in streaming mode
     if training_args.do_eval:
-        eval_dataset = tokenized_eval_dataset.map(group_texts, batched=True)
+        eval_dataset = tokenized_eval_dataset.map(
+            group_texts,
+            batched=True,
+            num_proc=data_args.preprocessing_num_workers,
+            load_from_cache_file=not data_args.overwrite_cache,
+        )
         if data_args.max_eval_samples is not None:
             eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
     
@@ -741,24 +755,12 @@ def main():
         train_start = time.time()
         rng, input_rng = jax.random.split(rng)
         
-        try:
-            samples = advance_iter_and_group_samples(training_iter, train_batch_size, max_seq_length)
-        except StopIteration:
-            # Once the end of the dataset stream is reached, the training iterator
-            # is reinitialized and reshuffled and a new eval dataset is randomely chosen.
-            shuffle_seed += 1
-            train_dataset.set_epoch(shuffle_seed)
-
-            training_iter = iter(train_dataset)
-
-            eval_dataset = advance_iter_and_group_samples(training_iter, data_args.num_eval_samples, max_seq_length)
-            samples = advance_iter_and_group_samples(training_iter, train_batch_size, max_seq_length)
         cur_step = step
         # skip to the step from which we are resuming
         if cur_step < resume_step:
             continue
         
-        batch = make_batch(samples)
+        batch = shard(train_dl.next())
         state, train_metric = p_train_step(state, batch)
         train_metrics.append(train_metric)
         if step % grad_accum_steps == 0:
