@@ -31,6 +31,7 @@ for i, doc in enumerate(
         index=i,
         repo_name=metadata["repo_name"],
         file_name=metadata["file_name"],
+        code_hash=hash(code),
     )
     duplicate_detector.add_file(document_id, code)
 
@@ -41,7 +42,7 @@ with open("duplicate_clusters.txt", "w+") as f:
     for duplicate_cluster in duplicate_clusters:
         cluster_str = ",".join(
             [
-                f"{document_id.index}|{document_id.repo_name}|{document_id.file_name}"
+                f"{document_id.index}|{document_id.repo_name}|{document_id.file_name}|{document_id.code_hash}"
                 for document_id in duplicate_cluster
             ]
         )
@@ -53,5 +54,5 @@ with open("documents_to_exclude.txt", "w+") as f:
     )
     for document_id in document_ids_to_exclude:
         f.write(
-            f"{document_id.index}|{document_id.repo_name}|{document_id.file_name}\n"
+            f"{document_id.index}|{document_id.repo_name}|{document_id.file_name}|{document_id.code_hash}\n"
         )
