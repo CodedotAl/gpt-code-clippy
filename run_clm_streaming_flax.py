@@ -342,7 +342,7 @@ def mb_item(x):
 #checkpoint functions
 def save_checkpoint(model, save_dir, state, with_opt:bool=True, push_to_hub:bool=False):
     state = jax_utils.unreplicate(state)
-    logger.info(f"SAVING CHECKPOINT IN {save_dir}", end=" ... ")
+    logger.info(f"SAVING CHECKPOINT IN {save_dir}...")
     save_dir = f"{save_dir}/ckpt-{mb_item(state.step)-1}"
     model.save_pretrained(
         save_dir,
@@ -358,7 +358,7 @@ def save_checkpoint(model, save_dir, state, with_opt:bool=True, push_to_hub:bool
     logger.info("checkpoint saved")
         
 def restore_checkpoint(save_dir, state):
-    logger.info(f"RESTORING CHECKPOINT FROM {save_dir}", end=" ... ")
+    logger.info(f"RESTORING CHECKPOINT FROM {save_dir}...")
     with open(os.path.join(save_dir, "flax_model.msgpack"), "rb") as f:
         params = from_bytes(state.params, f.read())
 
@@ -637,7 +637,7 @@ def main():
     num_epochs = int(training_args.num_train_epochs)
     train_batch_size = int(training_args.per_device_train_batch_size) * jax.device_count() * training_args.gradient_accumulation_steps
     eval_batch_size = int(training_args.per_device_eval_batch_size) * jax.device_count()
-    steps_per_epoch = len(train_dataset) // train_batch_size
+    # steps_per_epoch = len(train_dataset) // train_batch_size
     total_train_steps = training_args.max_steps
 
     # Create learning rate schedule
@@ -737,7 +737,7 @@ def main():
     state = state.replicate()
 
     logger.info("***** Running training *****")
-    logger.info(f"  Num examples = {len(train_dataset)}")
+    # logger.info(f"  Num examples = {len(train_dataset)}")
     logger.info(f"  Num Epochs = {num_epochs}")
     logger.info(f"  Instantaneous batch size per device = {training_args.per_device_train_batch_size}")
     logger.info(f"  Total train batch size (w. parallel, distributed and grad_accum) = {train_batch_size}")
@@ -760,7 +760,11 @@ def main():
         if cur_step < resume_step:
             continue
         
-        batch = shard(train_dl.next())
+        try:
+            batch = shard(next(train_dl))
+        except TypeError as e:
+            print(e)
+            continue
         state, train_metric = p_train_step(state, batch)
         train_metrics.append(train_metric)
         if step % grad_accum_steps == 0:
@@ -783,7 +787,7 @@ def main():
 
             train_metrics = []
 
-        if cur_step % (training_args.eval_steps * grad_accum_steps) == 0 and cur_step > 0:
+        if cur_step % (training_args.eval_steps * grad_accum_steps) == 0 and cur_step > 0 and training_args.do_eval:
             # ======================== Evaluating ==============================
             eval_metrics = []
             eval_loader = data_loader(input_rng, eval_dataset, eval_batch_size)

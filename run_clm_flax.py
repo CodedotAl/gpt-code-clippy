@@ -242,7 +242,7 @@ def mb_item(x):
 #checkpoint functions
 def save_checkpoint(model, save_dir, state, with_opt:bool=True, push_to_hub:bool=False):
     state = jax_utils.unreplicate(state)
-    logger.info(f"SAVING CHECKPOINT IN {save_dir}", end=" ... ")
+    logger.info(f"SAVING CHECKPOINT IN {save_dir}...")
     save_dir = f"{save_dir}/ckpt-{mb_item(state.step)-1}"
     model.save_pretrained(
         save_dir,
@@ -258,7 +258,7 @@ def save_checkpoint(model, save_dir, state, with_opt:bool=True, push_to_hub:bool
     logger.info("checkpoint saved")
         
 def restore_checkpoint(save_dir, state):
-    logger.info(f"RESTORING CHECKPOINT FROM {save_dir}", end=" ... ")
+    logger.info(f"RESTORING CHECKPOINT FROM {save_dir}...")
     with open(os.path.join(save_dir, "flax_model.msgpack"), "rb") as f:
         params = from_bytes(state.params, f.read())
 
