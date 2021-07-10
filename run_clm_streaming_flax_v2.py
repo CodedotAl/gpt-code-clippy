@@ -542,7 +542,7 @@ def main():
     #     train_iter = iter(train_dataset)
 
     
-    train_dl = PrefetchDataloader(
+    train_loader = PrefetchDataloader(
         tokenized_dataset, 
         int(training_args.per_device_train_batch_size) * jax.device_count(),
         block_size,
@@ -608,8 +608,8 @@ def main():
 
     # Create learning rate schedule
     gpt3_schedule_fn = gpt3_schedule(
-        training_args.warmup_steps,
-        training_args.decay_steps,
+        training_args.warmup_steps * training_args.gradient_accumulation_steps,
+        training_args.decay_steps * training_args.gradient_accumulation_steps,
         training_args.learning_rate,
         training_args.lerning_rate / 10.
     )
@@ -730,7 +730,7 @@ def main():
         # using advance_iter_and_group_samples seem to make training slower
         # samples = advance_iter_and_group_samples(iter(tokenized_dataset), int(training_args.per_device_train_batch_size) * jax.device_count(), block_size)
         # batch = shard(make_batch(samples))
-        batch = shard(next(train_dl))
+        batch = shard(next(train_loader))
         # logger.info(f"{batch['input_ids'].shape}")
         state, train_metric = p_train_step(state, batch)
         train_metrics.append(train_metric)
@@ -780,7 +780,7 @@ def main():
                 eval_metrics["perplexity"] = math.exp(eval_metrics["loss"])
             except OverflowError:
                 eval_metrics["perplexity"] = float("inf")
-
+            eval_loader.close()
             # Print metrics and update progress bar
             desc = f"Step... ({cur_step} | Eval Loss: {eval_metrics['loss']} | Eval Perplexity: {eval_metrics['perplexity']})"
             steps.write(desc)
@@ -805,6 +805,7 @@ def main():
                 if training_args.save_total_limit is not None:
                     rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
     
+    train_loader.close()
     # save model after training is over
     save_checkpoint(model, training_args.output_dir, state, with_opt=False,
                     push_to_hub=training_args.push_to_hub, repo_name_or_path=training_args.output_dir)
