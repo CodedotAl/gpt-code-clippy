@@ -657,7 +657,7 @@ def main():
     
     if training_args.resume_from_checkpoint:
         state = restore_checkpoint(training_args.resume_from_checkpoint, state)
-        resume_step = state.step
+        resume_step = mb_item(state.step)
     else:
         resume_step = 0
 

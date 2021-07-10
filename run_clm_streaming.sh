@@ -19,20 +19,19 @@
     --adam_beta2="0.95" \
     --weight_decay="0.01" \
     --overwrite_output_dir \
-    --num_train_epochs="1" \
-    --logging_steps="50" \
-    --eval_steps="50" \
+    --logging_steps="100" \
+    --eval_steps="100" \
     --push_to_hub="False" \
     --report_to="all" \
     --dtype="bfloat16" \
     --skip_memory_metrics="False" \
-    --save_steps="50" \
+    --save_steps="100" \
     --save_total_limit 2 \
-    --gradient_accumulation_steps 1 \
+    --gradient_accumulation_steps 8 \
     --report_to="wandb" \
     --run_name="testing" \
-    --max_eval_samples 10 \
+    --max_eval_samples 100 \
     --save_optimizer true \
-    --resume_from_checkpoint $HOME/gpt-neo-125M-code-clippy/ \
+    # --resume_from_checkpoint $HOME/gpt-neo-125M-code-clippy/ \
     # --max_train_samples="10000" \
     
