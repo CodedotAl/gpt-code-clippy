@@ -28,10 +28,11 @@
     --skip_memory_metrics="False" \
     --save_steps="50" \
     --save_total_limit 2 \
-    --gradient_accumulation_steps 8 \
+    --gradient_accumulation_steps 1 \
     --report_to="wandb" \
-    --max_eval_samples="1000" \
+    --run_name="testing" \
+    --max_eval_samples 10 \
     --save_optimizer true \
-    # --resume_from_checkpoint $HOME/gpt-neo-125M-code-clippy/ckpt_201 \
+    --resume_from_checkpoint $HOME/gpt-neo-125M-code-clippy/ \
     # --max_train_samples="10000" \
     

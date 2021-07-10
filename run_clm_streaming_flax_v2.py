@@ -33,6 +33,7 @@ from typing import Callable, Optional
 import json
 import shutil
 from collections import defaultdict
+from flax import training
 import numpy as np
 import datasets
 from datasets import Dataset, load_dataset
@@ -544,6 +545,7 @@ def main():
     
     train_loader = PrefetchDataloader(
         tokenized_dataset, 
+        training_args.max_steps * training_args.gradient_accumulation_steps, 
         int(training_args.per_device_train_batch_size) * jax.device_count(),
         block_size,
         prefetch_buffer=data_args.prefetch_buffer,
@@ -584,6 +586,7 @@ def main():
         try:
             import wandb
             wandb.init(
+                name=training_args.run_name,
                 entity="wandb", 
                 project="hf-flax-gpt-neo-copilot",
                 sync_tensorboard=True
@@ -755,15 +758,16 @@ def main():
         if cur_step % (training_args.eval_steps * grad_accum_steps) == 0 and cur_step > 0 and training_args.do_eval:
             # ======================== Evaluating ==============================
             eval_metrics = []
+            eval_steps = data_args.max_eval_samples # len(eval_dataset) // eval_batch_size
             # eval_loader = data_loader(input_rng, eval_dataset, eval_batch_size)
             eval_loader = PrefetchDataloader(
                 tokenized_eval_dataset, 
+                eval_steps,
                 eval_batch_size,
                 block_size,
                 prefetch_buffer=data_args.prefetch_buffer,
                 shuffle=False,
             )
-            eval_steps = data_args.max_eval_samples # len(eval_dataset) // eval_batch_size
             for _ in tqdm(range(eval_steps), desc="Evaluating...", position=2, leave=False):
                 # Model forward
                 batch = shard(next(eval_loader))
@@ -778,7 +782,8 @@ def main():
                 eval_metrics["perplexity"] = math.exp(eval_metrics["loss"])
             except OverflowError:
                 eval_metrics["perplexity"] = float("inf")
-            eval_loader.close()
+            # TODO: this needs to be closed properly
+            eval_loader.terminate()
             # Print metrics and update progress bar
             desc = f"Step... ({cur_step} | Eval Loss: {eval_metrics['loss']} | Eval Perplexity: {eval_metrics['perplexity']})"
             steps.write(desc)
@@ -799,11 +804,11 @@ def main():
                                       push_to_hub=training_args.push_to_hub, repo_name_or_path=training_args.output_dir)
                 if model_args.save_optimizer:
                     # this saves full state including optimizer
-                    save_checkpoint(training_args.output_dir, state, state.step, keep=training_args.save_total_limit, overwrite=False)
+                    save_checkpoint(training_args.output_dir, jax_utils.unreplicate(state), cur_step, keep=training_args.save_total_limit, overwrite=False)
                 if training_args.save_total_limit is not None:
                     rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
     
-    train_loader.close()
+    train_loader.terminate()
     # save model after training is over
     save_checkpoint(model, training_args.output_dir, state, with_opt=False,
                     push_to_hub=training_args.push_to_hub, repo_name_or_path=training_args.output_dir)

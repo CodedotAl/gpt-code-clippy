@@ -1,7 +1,7 @@
 import numpy as np
 import threading
 import queue
-from multiprocessing import Process, Queue
+import multiprocessing
 from collections import defaultdict
 import jax
 import jax.numpy as jnp
@@ -15,8 +15,9 @@ def make_batch(samples):
 
 class PrefetchDataloaderTread(threading.Thread):
     "Prefetch dataloader for IterableDataset"
-    def __init__(self, dataset, batch_size, sequence_length, prefetch_buffer=1, shuffle=True, shuffle_buffer=1000, seed=0):
+    def __init__(self, dataset, max_steps, batch_size, sequence_length, prefetch_buffer=1, shuffle=True, shuffle_buffer=1000, seed=0):
         super().__init__(daemon=True)
+        self.max_steps = max_steps
         self.bs = batch_size
         self.seq_len = sequence_length
         self.max_length = batch_size * sequence_length
@@ -40,7 +41,9 @@ class PrefetchDataloaderTread(threading.Thread):
         return batch
         
     def run(self):
-        while True:
+        i = 0
+        while True and i < self.max_steps:
+            i += 1
             # prepair next batch
             sample = self.rem.copy()
             l = len(sample["input_ids"])
@@ -56,15 +59,17 @@ class PrefetchDataloaderTread(threading.Thread):
             samples = {k:np.array([v[i*self.seq_len:(i+1)*self.seq_len] for i in range(self.bs)]) for k,v in sample.items()}
             
             self.queue.put(make_batch(samples))
+        self.queue.put(None)
     
     def __iter__(self):
         return self
 
 
-class PrefetchDataloader(Process):
+class PrefetchDataloader(multiprocessing.Process):
     "Prefetch dataloader for IterableDataset"
-    def __init__(self, dataset, batch_size, sequence_length, prefetch_buffer=1, shuffle=True, shuffle_buffer=1000, seed=0):
+    def __init__(self, dataset, max_steps, batch_size, sequence_length, prefetch_buffer=1, shuffle=True, shuffle_buffer=1000, seed=0):
         super().__init__(daemon=True)
+        self.max_steps = max_steps
         self.bs = batch_size
         self.seq_len = sequence_length
         self.max_length = batch_size * sequence_length
@@ -74,7 +79,7 @@ class PrefetchDataloader(Process):
         self.seed = seed
         self.dataset = dataset
         self.make_iter()
-        self.queue = Queue(prefetch_buffer)
+        self.queue = multiprocessing.Queue(prefetch_buffer)
         self.rem = defaultdict(list)
         self.start()
 
@@ -90,7 +95,8 @@ class PrefetchDataloader(Process):
         return make_batch(self.queue.get())
         
     def run(self):
-        while True:
+        i = 0
+        while True and i < self.max_steps:
             # prepair next batch
             sample = self.rem.copy()
             l = len(sample["input_ids"])
@@ -110,6 +116,7 @@ class PrefetchDataloader(Process):
             samples = {k:np.array([v[i*self.seq_len:(i+1)*self.seq_len] for i in range(self.bs)]) for k,v in sample.items()}
             
             self.queue.put(samples)
+        self.queue.put(None)
     
     def __iter__(self):
         return self
