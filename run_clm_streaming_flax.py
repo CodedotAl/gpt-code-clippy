@@ -33,8 +33,10 @@ from typing import Callable, Optional
 import json
 import shutil
 from collections import defaultdict
-from queue import Queue
-import threading
+import numpy as np
+# from queue import Queue
+# import threading
+from multiprocessing import Process, Queue
 import datasets
 from datasets import Dataset, load_dataset
 from tqdm import tqdm
@@ -172,6 +174,7 @@ class DataTrainingArguments:
     )
     num_train_steps: int = field(default=50000, metadata={"help": "The number of training steps."})
     num_eval_samples: int = field(default=50000, metadata={"help": "The number of samples to be used for evaluation"})
+    prefetch_buffer: int = field(default=8, metadata={"help": "The number of batches to prefetch for loading"})
 
     def __post_init__(self):
         if self.dataset_name is None and self.train_file is None and self.validation_file is None:
@@ -236,7 +239,55 @@ def make_batch(samples):
     batch['labels'] = batch['input_ids'].copy()
     return batch
 
-class PrefetchDataloader(threading.Thread):
+# class PrefetchDataloader(threading.Thread):
+#     "Prefetch dataloader for IterableDataset"
+#     def __init__(self, dataset, batch_size, sequence_length, prefetch_buffer=1, shuffle=True, shuffle_buffer=1000, seed=0):
+#         super().__init__(daemon=True)
+#         self.bs = batch_size
+#         self.seq_len = sequence_length
+#         self.max_length = batch_size * sequence_length
+#         self.prefetch_buffer = prefetch_buffer
+#         self.shuffle = shuffle
+#         self.shuffle_buffer = shuffle_buffer
+#         self.seed = seed
+#         self.dataset = dataset
+#         if shuffle:
+#             shuffled_dataset = dataset.shuffle(shuffle_buffer, seed=self.seed)
+#             self.seed += 1
+#             self.ds_iter = iter(shuffled_dataset)
+#         else:
+#             self.ds_iter = iter(dataset)
+#         self.queue = Queue(prefetch_buffer)
+#         self.rem = defaultdict(list)
+#         self.start()
+        
+#     def __next__(self):
+#         batch = self.queue.get()
+#         return batch
+        
+#     def run(self):
+#         while True:
+#             # prepair next batch
+#             sample = self.rem.copy()
+#             l = len(sample["input_ids"])
+#             max_length = self.max_length
+#             while l < max_length:
+#                 next_sample = next(self.ds_iter)
+#                 l += len(next_sample["input_ids"])
+#                 sample = {k:sample[k]+next_sample[k] for k in next_sample.keys()}
+            
+#             self.rem = {k:v[max_length:] for k,v in sample.items()}
+#             sample = {k:v[:max_length] for k,v in sample.items()}
+#             # regroup to shape [bs x seq_len]
+#             samples = {k:np.array([v[i*self.seq_len:(i+1)*self.seq_len] for i in range(self.bs)]) for k,v in sample.items()}
+            
+#             self.queue.put(make_batch(samples))
+    
+#     def __iter__(self):
+#         return self
+
+
+class PrefetchDataloader(Process):
     "Prefetch dataloader for IterableDataset"
     def __init__(self, dataset, batch_size, sequence_length, prefetch_buffer=1, shuffle=True, shuffle_buffer=1000, seed=0):
         super().__init__(daemon=True)
@@ -257,11 +308,9 @@ class PrefetchDataloader(threading.Thread):
         self.queue = Queue(prefetch_buffer)
         self.rem = defaultdict(list)
         self.start()
-        
-        
+               
     def __next__(self):
-        batch = self.queue.get()
-        return batch
+        return make_batch(self.queue.get())
         
     def run(self):
         while True:
@@ -274,16 +323,15 @@ class PrefetchDataloader(threading.Thread):
                 l += len(next_sample["input_ids"])
                 sample = {k:sample[k]+next_sample[k] for k in next_sample.keys()}
             
-            self.rem = {k:v[-max_length:] for k,v in sample.items()}
+            self.rem = {k:v[max_length:] for k,v in sample.items()}
             sample = {k:v[:max_length] for k,v in sample.items()}
             # regroup to shape [bs x seq_len]
-            samples = {k:[v[i*self.seq_len:(i+1)*self.seq_len] for i in range(self.bs)] for k,v in sample.items()}
+            samples = {k:np.array([v[i*self.seq_len:(i+1)*self.seq_len] for i in range(self.bs)]) for k,v in sample.items()}
             
-            self.queue.put(make_batch(samples))
+            self.queue.put(samples)
     
     def __iter__(self):
         return self
-
 
 def data_loader(rng: jax.random.PRNGKey, dataset: Dataset, batch_size: int, shuffle: bool = False):
     """
@@ -317,7 +365,6 @@ def write_train_metric(summary_writer, train_metrics, train_time, step):
         tag = f"train_{key}"
         for i, val in enumerate(vals):
             summary_writer.scalar(tag, val, step - len(vals) + i + 1)
-
 
 def write_eval_metric(summary_writer, eval_metrics, step):
     for metric_name, value in eval_metrics.items():
@@ -579,7 +626,8 @@ def main():
     train_dl = PrefetchDataloader(
         tokenized_dataset, 
         int(training_args.per_device_train_batch_size) * jax.device_count(),
-        block_size, 
+        block_size,
+        prefetch_buffer=data_args.prefetch_buffer,
         seed=shuffle_seed
     )
     # evaluation data is not in streaming mode
@@ -760,11 +808,10 @@ def main():
         if cur_step < resume_step:
             continue
         
-        try:
-            batch = shard(next(train_dl))
-        except TypeError as e:
-            print(e)
-            continue
+        # samples = advance_iter_and_group_samples(iter(tokenized_dataset), int(training_args.per_device_train_batch_size) * jax.device_count(), block_size)
+        # batch = shard(make_batch(samples))
+        batch = shard(next(train_dl))
+        # logger.info(f"{batch['input_ids'].shape}")
         state, train_metric = p_train_step(state, batch)
         train_metrics.append(train_metric)
         if step % grad_accum_steps == 0:
@@ -835,3 +882,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
