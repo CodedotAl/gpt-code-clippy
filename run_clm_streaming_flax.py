@@ -276,7 +276,7 @@ def make_batch(samples):
 #                 l += len(next_sample["input_ids"])
 #                 sample = {k:sample[k]+next_sample[k] for k in next_sample.keys()}
             
-#             self.rem = {k:v[-max_length:] for k,v in sample.items()}
+#             self.rem = {k:v[max_length:] for k,v in sample.items()}
 #             sample = {k:v[:max_length] for k,v in sample.items()}
 #             # regroup to shape [bs x seq_len]
 #             samples = {k:np.array([v[i*self.seq_len:(i+1)*self.seq_len] for i in range(self.bs)]) for k,v in sample.items()}
@@ -323,7 +323,7 @@ class PrefetchDataloader(Process):
                 l += len(next_sample["input_ids"])
                 sample = {k:sample[k]+next_sample[k] for k in next_sample.keys()}
             
-            self.rem = {k:v[-max_length:] for k,v in sample.items()}
+            self.rem = {k:v[max_length:] for k,v in sample.items()}
             sample = {k:v[:max_length] for k,v in sample.items()}
             # regroup to shape [bs x seq_len]
             samples = {k:np.array([v[i*self.seq_len:(i+1)*self.seq_len] for i in range(self.bs)]) for k,v in sample.items()}
@@ -365,7 +365,6 @@ def write_train_metric(summary_writer, train_metrics, train_time, step):
         tag = f"train_{key}"
         for i, val in enumerate(vals):
             summary_writer.scalar(tag, val, step - len(vals) + i + 1)
-
 
 def write_eval_metric(summary_writer, eval_metrics, step):
     for metric_name, value in eval_metrics.items():
