@@ -5,19 +5,19 @@
     --dataset_name $HOME/gpt-code-clippy/code_clippy.py \
     --data_dir /home/shared/code-clippy-dataset/merged-data \
     --text_column_name="text" \
-    --do_train \
+    --do_train --do_eval \
     --block_size="1024" \
     --per_device_train_batch_size="16" \
     --per_device_eval_batch_size="16" \
     --preprocessing_num_workers="8" \
     --learning_rate="3e-4" \
     --adafactor \
-    --warmup_steps="50" \
+    --warmup_steps="250" \
     --adam_beta1="0.9" \
     --adam_beta2="0.98" \
     --weight_decay="0.01" \
     --overwrite_output_dir \
-    --max_steps 30000 \
+    --max_steps 50000 \
     --num_train_epochs="1" \
     --logging_steps="50" \
     --eval_steps="500" \
