@@ -241,9 +241,13 @@ def mb_item(x):
 
 #checkpoint functions
 def save_checkpoint(model, save_dir, state, with_opt:bool=True, push_to_hub:bool=False):
+    """
+    If `push_to_hub` is True, will save to `save_dir`. Otherwise will save to `save_dir/ckpt-{step}`.
+    """
     state = jax_utils.unreplicate(state)
     logger.info(f"SAVING CHECKPOINT IN {save_dir}...")
-    save_dir = f"{save_dir}/ckpt-{mb_item(state.step)-1}"
+    if not push_to_hub:
+        save_dir = f"{save_dir}/ckpt-{mb_item(state.step)-1}"
     model.save_pretrained(
         save_dir,
         params=state.params,

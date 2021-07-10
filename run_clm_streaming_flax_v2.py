@@ -495,6 +495,7 @@ def main():
             data_args.dataset_name,
             data_dir=data_args.data_dir,
             cache_dir=model_args.cache_dir, 
+            streaming=True,
             split="validation"
         )
         
@@ -539,8 +540,8 @@ def main():
 
     # Preprocessing the datasets.
     # First we tokenize all the texts.
-    column_names = eval_dataset.column_names
-    text_column_name = data_args.text_column_name if data_args.text_column_name in column_names else column_names[0]
+    # column_names = eval_dataset.column_names
+    text_column_name = data_args.text_column_name # if data_args.text_column_name in column_names else column_names[0]
 
     # since this will be pickled to avoid _LazyModule error in Hasher force logger loading before tokenize_function
     tok_logger = transformers.utils.logging.get_logger("transformers.tokenization_utils_base")
@@ -562,9 +563,9 @@ def main():
     tokenized_eval_dataset = eval_dataset.map(
         tokenize_function,
         batched=True,
-        remove_columns=column_names,
-        num_proc=data_args.preprocessing_num_workers,
-        load_from_cache_file=not data_args.overwrite_cache,
+        # remove_columns=column_names,
+        # num_proc=data_args.preprocessing_num_workers,
+        # load_from_cache_file=not data_args.overwrite_cache,
     )
 
     if data_args.block_size is None:
@@ -632,15 +633,15 @@ def main():
         seed=shuffle_seed
     )
     # evaluation data is not in streaming mode
-    if training_args.do_eval:
-        eval_dataset = tokenized_eval_dataset.map(
-            group_texts,
-            batched=True,
-            num_proc=data_args.preprocessing_num_workers,
-            load_from_cache_file=not data_args.overwrite_cache,
-        )
-        if data_args.max_eval_samples is not None:
-            eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
+    # if training_args.do_eval:
+    #     eval_dataset = tokenized_eval_dataset.map(
+    #         group_texts,
+    #         batched=True,
+    #         num_proc=data_args.preprocessing_num_workers,
+    #         load_from_cache_file=not data_args.overwrite_cache,
+    #     )
+    #     if data_args.max_eval_samples is not None:
+    #         eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
     
     # Enable tensorboard only on the master node
     has_tensorboard = is_tensorboard_available()
@@ -798,7 +799,7 @@ def main():
     train_time = 0
     train_metrics = []
     # TODO: figure out training duration
-    steps = tqdm(range(total_train_steps*grad_accum_steps), desc=f"Step ... (1/{total_train_steps})", position=0, initial=resume_step)
+    steps = tqdm(range(total_train_steps // grad_accum_steps), position=0, initial=resume_step)
     for step in range(total_train_steps):
         # ======================== Training ================================
         train_start = time.time()
@@ -838,11 +839,18 @@ def main():
         if cur_step % (training_args.eval_steps * grad_accum_steps) == 0 and cur_step > 0 and training_args.do_eval:
             # ======================== Evaluating ==============================
             eval_metrics = []
-            eval_loader = data_loader(input_rng, eval_dataset, eval_batch_size)
-            eval_steps = len(eval_dataset) // eval_batch_size
+            # eval_loader = data_loader(input_rng, eval_dataset, eval_batch_size)
+            eval_loader = PrefetchDataloader(
+                tokenized_eval_dataset, 
+                int(training_args.per_device_eval_batch_size) * jax.device_count(),
+                block_size,
+                prefetch_buffer=data_args.prefetch_buffer,
+                shuffle=False,
+            )
+            eval_steps = data_args.max_eval_samples # len(eval_dataset) // eval_batch_size
             for _ in tqdm(range(eval_steps), desc="Evaluating...", position=2, leave=False):
                 # Model forward
-                batch = next(eval_loader)
+                batch = shard(next(eval_loader))
                 metrics = p_eval_step(state.params, batch)
                 eval_metrics.append(metrics)
 
