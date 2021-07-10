@@ -609,9 +609,9 @@ def main():
     # Create learning rate schedule
     gpt3_schedule_fn = gpt3_schedule(
         training_args.warmup_steps * training_args.gradient_accumulation_steps,
-        training_args.decay_steps * training_args.gradient_accumulation_steps,
+        model_args.decay_steps * training_args.gradient_accumulation_steps,
         training_args.learning_rate,
-        training_args.lerning_rate / 10.
+        training_args.learning_rate / 10.
     )
 
     # We use Optax's "masking" functionality to not apply weight decay
@@ -704,11 +704,9 @@ def main():
     state = state.replicate()
 
     logger.info("***** Running training *****")
-    # logger.info(f"  Num examples = {len(train_dataset)}")
-    logger.info(f"  Num Epochs = {num_epochs}")
     logger.info(f"  Instantaneous batch size per device = {training_args.per_device_train_batch_size}")
     logger.info(f"  Total train batch size (w. parallel, distributed and grad_accum) = {train_batch_size}")
-    logger.info(f"  Total optimization steps = {total_train_steps}")
+    logger.info(f"  Total optimization steps = {training_args.max_steps}")
 
     if not training_args.skip_memory_metrics:
         server = jax.profiler.start_server(9999)

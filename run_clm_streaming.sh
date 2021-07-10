@@ -7,7 +7,7 @@
     --text_column_name="text" \
     --do_train --do_eval \
     --block_size="2048" \
-    --per_device_train_batch_size="16" \
+    --per_device_train_batch_size="8" \
     --per_device_eval_batch_size="16" \
     --preprocessing_num_workers="8" \
     --learning_rate="6e-4" \
@@ -28,10 +28,10 @@
     --skip_memory_metrics="False" \
     --save_steps="50" \
     --save_total_limit 2 \
-    --gradient_accumulation_steps 4 \
+    --gradient_accumulation_steps 8 \
     --report_to="wandb" \
     --max_eval_samples="1000" \
-    --save_optimizer = True \
+    --save_optimizer true \
     # --resume_from_checkpoint $HOME/gpt-neo-125M-code-clippy/ckpt_201 \
     # --max_train_samples="10000" \
     
