@@ -25,7 +25,7 @@
     --dtype="bfloat16" \
     --skip_memory_metrics="True" \
     --save_steps="500" \
-    --save_total_limit 2 \
+    --save_total_limit 10 \
     --gradient_accumulation_steps 16 \
     --report_to="wandb" \
     --run_name="125m_1e-4lr_1024bs" \
