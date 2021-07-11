@@ -611,8 +611,8 @@ def main():
 
     # Create learning rate schedule
     gpt3_schedule_fn = gpt3_schedule(
-        training_args.warmup_steps * training_args.gradient_accumulation_steps,
-        model_args.decay_steps * training_args.gradient_accumulation_steps,
+        training_args.warmup_steps,
+        model_args.decay_steps,
         training_args.learning_rate,
         training_args.learning_rate / 10.
     )
