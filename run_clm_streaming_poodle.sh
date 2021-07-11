@@ -1,7 +1,7 @@
 #! /bin/bash
 ./run_clm_streaming_flax_v2.py \
     --output_dir $HOME/gpt-neo-125M-code-clippy-test \
-    --model_name_or_path="flax-community-gpt-neo-125M-code-clippy" \
+    --model_name_or_path="flax-community/gpt-neo-125M-code-clippy" \
     --dataset_name $HOME/gpt-code-clippy/code_clippy.py \
     --data_dir /home/shared/code_clippy_data \
     --text_column_name="text" \
