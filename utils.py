@@ -107,6 +107,8 @@ class PrefetchDataloader(multiprocessing.Process):
                 except StopIteration:
                     # reset generator if a pass through dataset is completed
                     self.make_iter()
+                    next_sample = next(self.ds_iter)
+
                 l += len(next_sample["input_ids"])
                 sample = {k:sample[k]+next_sample[k] for k in next_sample.keys()}
             
