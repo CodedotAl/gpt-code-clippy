@@ -28,7 +28,7 @@
     --save_total_limit 2 \
     --gradient_accumulation_steps 16 \
     --report_to="wandb" \
-    --run_name="poodle-long-run" \
+    --run_name="125m_1e-4lr_1024bs" \
     --max_eval_samples 2000 \
     --save_optimizer true \
     # --adafactor \
