@@ -1,6 +1,6 @@
 #! /bin/bash
 ./run_clm_streaming_flax_v2.py \
-    --output_dir $HOME/gpt-neo-125M-code-clippy-test \
+    --output_dir $HOME/gpt-neo-125M-code-clippy-test-1 \
     --model_name_or_path="flax-community/gpt-neo-125M-code-clippy" \
     --dataset_name $HOME/gpt-code-clippy/code_clippy.py \
     --data_dir /home/shared/code_clippy_data \
@@ -16,7 +16,7 @@
     --decay_steps 25000 \
     --adam_beta1="0.9" \
     --adam_beta2="0.95" \
-    --weight_decay="0.01" \
+    --weight_decay="0.1" \
     --overwrite_output_dir \
     --logging_steps="100" \
     --eval_steps="500" \
