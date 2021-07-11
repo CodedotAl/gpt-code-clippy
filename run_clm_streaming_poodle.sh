@@ -11,14 +11,14 @@
     --per_device_eval_batch_size="16" \
     --preprocessing_num_workers="8" \
     --learning_rate="1e-4" \
-    --max_steps 2500 \
-    --warmup_steps 3000 \
-    --decay_steps 250 \
+    --max_steps 100000 \
+    --warmup_steps 2500 \
+    --decay_steps 25000 \
     --adam_beta1="0.9" \
     --adam_beta2="0.95" \
     --weight_decay="0.01" \
     --overwrite_output_dir \
-    --logging_steps="10" \
+    --logging_steps="100" \
     --eval_steps="500" \
     --push_to_hub="False" \
     --report_to="all" \
