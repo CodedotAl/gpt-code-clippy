@@ -807,7 +807,7 @@ def main():
                                       push_to_hub=training_args.push_to_hub)
                 if model_args.save_optimizer:
                     # this saves full state including optimizer
-                    save_checkpoint(training_args.output_dir, jax_utils.unreplicate(state), cur_step, keep=training_args.save_total_limit, overwrite=False)
+                    save_checkpoint(training_args.output_dir, jax_utils.unreplicate(state), cur_step, keep=training_args.save_total_limit, overwrite=True)
                 if training_args.save_total_limit is not None:
                     rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
     
