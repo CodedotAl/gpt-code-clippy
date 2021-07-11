@@ -312,16 +312,19 @@ def mb_item(x):
     return x.item() if hasattr(x, "item") else x
 
 #checkpoint functions
-def save_model_checkpoint(model, save_dir, state, with_opt:bool=False, push_to_hub:bool=False, **kwargs):
+def save_model_checkpoint(model, save_dir, state, with_opt:bool=True, push_to_hub:bool=False):
+    """
+    If `push_to_hub` is True, will save to `save_dir`. Otherwise will save to `save_dir/ckpt-{step}`.
+    """
     state = jax_utils.unreplicate(state)
     logger.info(f"SAVING CHECKPOINT IN {save_dir}...")
-    save_dir = f"{save_dir}/ckpt-{mb_item(state.step)-1}"
+    if not push_to_hub:
+        save_dir = f"{save_dir}/ckpt-{mb_item(state.step)-1}"
     model.save_pretrained(
         save_dir,
         params=state.params,
         push_to_hub=push_to_hub,
         commit_message=f"Saving weights and logs at step {mb_item(state.step)-1}",
-        **kwargs
     )
     if with_opt:
         with open(os.path.join(save_dir, "opt_state.msgpack"), "wb") as f:
@@ -329,7 +332,7 @@ def save_model_checkpoint(model, save_dir, state, with_opt:bool=False, push_to_h
         with open(os.path.join(save_dir, "training_state.json"), "w") as f:
             json.dump({"step": state.step.item()}, f)
     logger.info("checkpoint saved")
-        
+
 def restore_model_checkpoint(save_dir, state):
     logger.info(f"RESTORING CHECKPOINT FROM {save_dir}...")
     with open(os.path.join(save_dir, "flax_model.msgpack"), "rb") as f:
@@ -801,17 +804,17 @@ def main():
             # save checkpoint after each epoch and push checkpoint to the hub
             if jax.process_index() == 0:
                 save_model_checkpoint(model, training_args.output_dir, state, with_opt=False,
-                                      push_to_hub=training_args.push_to_hub, repo_name_or_path=training_args.output_dir)
+                                      push_to_hub=training_args.push_to_hub)
                 if model_args.save_optimizer:
                     # this saves full state including optimizer
-                    save_checkpoint(training_args.output_dir, jax_utils.unreplicate(state), cur_step, keep=training_args.save_total_limit, overwrite=False)
+                    save_checkpoint(training_args.output_dir, jax_utils.unreplicate(state), cur_step, keep=training_args.save_total_limit, overwrite=True)
                 if training_args.save_total_limit is not None:
                     rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
     
     train_loader.terminate()
     # save model after training is over
     save_checkpoint(model, training_args.output_dir, state, with_opt=False,
-                    push_to_hub=training_args.push_to_hub, repo_name_or_path=training_args.output_dir)
+                    push_to_hub=training_args.push_to_hub)
 
 
 
