@@ -44,6 +44,7 @@ import transformers
 from flax import jax_utils, traverse_util
 from flax.jax_utils import unreplicate
 from flax.training import train_state
+from flax.training.checkpoints import save_checkpoint, restore_checkpoint
 from flax.training.common_utils import get_metrics, onehot, shard, shard_prng_key
 from flax.serialization import to_bytes, from_bytes
 from transformers import (
@@ -240,19 +241,16 @@ def mb_item(x):
     return x.item() if hasattr(x, "item") else x
 
 #checkpoint functions
-def save_checkpoint(model, save_dir, state, with_opt:bool=True, push_to_hub:bool=False):
-    """
-    If `push_to_hub` is True, will save to `save_dir`. Otherwise will save to `save_dir/ckpt-{step}`.
-    """
+def save_model_checkpoint(model, save_dir, state, with_opt:bool=False, push_to_hub:bool=False, **kwargs):
     state = jax_utils.unreplicate(state)
     logger.info(f"SAVING CHECKPOINT IN {save_dir}...")
-    if not push_to_hub:
-        save_dir = f"{save_dir}/ckpt-{mb_item(state.step)-1}"
+    save_dir = f"{save_dir}/ckpt-{mb_item(state.step)-1}"
     model.save_pretrained(
         save_dir,
         params=state.params,
         push_to_hub=push_to_hub,
         commit_message=f"Saving weights and logs at step {mb_item(state.step)-1}",
+        **kwargs
     )
     if with_opt:
         with open(os.path.join(save_dir, "opt_state.msgpack"), "wb") as f:
@@ -261,7 +259,7 @@ def save_checkpoint(model, save_dir, state, with_opt:bool=True, push_to_hub:bool
             json.dump({"step": state.step.item()}, f)
     logger.info("checkpoint saved")
         
-def restore_checkpoint(save_dir, state):
+def restore_model_checkpoint(save_dir, state):
     logger.info(f"RESTORING CHECKPOINT FROM {save_dir}...")
     with open(os.path.join(save_dir, "flax_model.msgpack"), "rb") as f:
         params = from_bytes(state.params, f.read())
@@ -286,6 +284,7 @@ def rotate_checkpoints(ckpt_dir:str, save_total_limit:int):
     for ckpt in ckpts_to_delete:
         logger.info(f"Deleting older checkpoint [{ckpt}] due to save_total_limit ({save_total_limit})")
         shutil.rmtree(ckpt)
+
 
 def main():
     # See all possible arguments in src/transformers/training_args.py
@@ -731,7 +730,11 @@ def main():
             if cur_step % (training_args.save_steps * grad_accum_steps) == 0 and cur_step > 0:
                 # save checkpoint after each epoch and push checkpoint to the hub
                 if jax.process_index() == 0:
-                    save_checkpoint(model, training_args.output_dir, state, push_to_hub=training_args.push_to_hub)
+                    save_model_checkpoint(model, training_args.output_dir, state, with_opt=False,
+                                      push_to_hub=training_args.push_to_hub, repo_name_or_path=training_args.output_dir)
+                    if model_args.save_optimizer:
+                        # this saves full state including optimizer
+                        save_checkpoint(training_args.output_dir, state, state.step, keep=training_args.save_total_limit, overwrite=False)
                     if training_args.save_total_limit is not None:
                         rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
     
