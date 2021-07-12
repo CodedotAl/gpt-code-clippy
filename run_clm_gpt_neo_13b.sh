@@ -6,9 +6,9 @@
     --dataset_config_name="python" \
     --text_column_name="func_code_string" \
     --do_train --do_eval \
-    --block_size="1024" \
-    --per_device_train_batch_size="3" \
-    --per_device_eval_batch_size="3" \
+    --block_size="2048" \
+    --per_device_train_batch_size="1" \
+    --per_device_eval_batch_size="1" \
     --preprocessing_num_workers="8" \
     --learning_rate="1e-4" \
     --warmup_steps="1000" \

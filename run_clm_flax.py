@@ -732,14 +732,13 @@ def main():
                 if jax.process_index() == 0:
                     save_model_checkpoint(model, training_args.output_dir, state, with_opt=False,
                                       push_to_hub=training_args.push_to_hub, repo_name_or_path=training_args.output_dir)
-                    if model_args.save_optimizer:
-                        # this saves full state including optimizer
-                        save_checkpoint(training_args.output_dir, state, state.step, keep=training_args.save_total_limit, overwrite=False)
+                    # this saves full state including optimizer
+#                     save_checkpoint(training_args.output_dir, state, state.step, keep=training_args.save_total_limit, overwrite=False)
                     if training_args.save_total_limit is not None:
                         rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
     
     # save model after training is over
-    save_checkpoint(model, training_args.output_dir, state, with_opt=False, push_to_hub=training_args.push_to_hub)
+    save_model_checkpoint(model, training_args.output_dir, state, with_opt=False, push_to_hub=training_args.push_to_hub)
 
 
 
