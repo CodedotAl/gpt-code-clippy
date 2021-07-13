@@ -26,7 +26,10 @@ duplicate_detector = DuplicateDetector(
 rdr = lm_dataformat.Reader(data_files)
 
 for i, doc in enumerate(
-    tqdm.tqdm(rdr.stream_data(get_meta=True), desc="adding files to duplicate detector")
+    tqdm.tqdm(
+        rdr.stream_data(get_meta=True, threaded=True),
+        desc="adding files to duplicate detector",
+    )
 ):
     code, metadata = doc
     document_id = DocumentID(
@@ -59,14 +62,14 @@ with open("documents_to_exclude.txt", "w+") as f:
             f"{document_id.index}|{document_id.repo_name}|{document_id.file_name}\n"
         )
 
-data = []
-
 rdr = lm_dataformat.Reader(data_files)
 ar = lm_dataformat.Archive(args.output_dir)
 j = 0
 
 for i, doc in enumerate(
-    tqdm.tqdm(rdr.stream_data(get_meta=True), desc="creating deduplicated data")
+    tqdm.tqdm(
+        rdr.stream_data(get_meta=True, threaded=True), desc="creating deduplicated data"
+    )
 ):
     code, metadata = doc
 
