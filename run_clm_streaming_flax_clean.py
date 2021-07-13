@@ -293,7 +293,7 @@ def restore_model_checkpoint(save_dir, state):
     logger.info("checkpoint restored")
     # reinstantiate inner opt state to avoid type conflict
     if hasattr(opt_state, "inner_opt_state"):
-        print("restoring multisteps optimizer")
+        print("restoring state ofmultisteps optimizer")
         inner_opt_state = reinstantiate_states(opt_state.inner_opt_state)
         ms_state_dict = {k:getattr(state.opt_state, k) for k in state.opt_state._fields}
         ms_state_dict["inner_opt_state"] = inner_opt_state
@@ -577,6 +577,10 @@ def main():
             eps=training_args.adam_epsilon,
             weight_decay=training_args.weight_decay,
             mask=decay_mask_fn,
+        )
+        optimizer = optax.chain(
+            optax.clip_by_global_norm(1),
+            optimizer
         )
     if training_args.gradient_accumulation_steps > 1:
         optimizer = optax.MultiSteps(optimizer, training_args.gradient_accumulation_steps)

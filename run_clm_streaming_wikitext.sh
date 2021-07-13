@@ -31,7 +31,7 @@
     --run_name="testing-mini" \
     --max_eval_samples 100 \
     --save_optimizer true \
-    --resume_from_checkpoint $HOME/gpt-neo-125M-test/ckpt-800 \
+    # --resume_from_checkpoint $HOME/gpt-neo-125M-test/ckpt-800 \
     # --adafactor \
     # --max_train_samples="10000" \
     
