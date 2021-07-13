@@ -266,6 +266,21 @@ def save_model_checkpoint(model, save_dir, state, with_opt:bool=True, push_to_hu
             json.dump({"step": state.step.item()}, f)
     logger.info("checkpoint saved")
 
+# this is added to make resuming from checkpoint to work with adafactor
+# to be removed when issue is fixed
+# notice that adafactor state is perturbed by fake_update
+def _zeros_tree_like(inp_tree):
+    return jax.tree_map(jnp.zeros_like, inp_tree)
+
+def fake_update(state):
+    fake_updates = _zeros_tree_like(state.params)
+    _, new_inner_opt_state = state.tx.inner_opt.update(fake_updates, state.opt_state.inner_opt_state, state.params)
+    opt_state = state.opt_state
+    new_opt_state = optax.MultiStepsState(mini_step=opt_state.mini_step, 
+                                        gradient_step=opt_state.gradient_step, 
+                                        inner_opt_state=new_inner_opt_state,
+                                        acc_grads=opt_state.acc_grads)
+    return state.replace(opt_state=new_opt_state)
 
 def reinstantiate_states(opt_state):
     new_state = []
@@ -620,6 +635,8 @@ def main():
     if training_args.resume_from_checkpoint:
         state = restore_model_checkpoint(training_args.resume_from_checkpoint, state)
         resume_step = mb_item(state.step)
+        if training_args.adafactor:
+            state = fake_update(state)
     else:
         resume_step = 0
 
@@ -680,13 +697,12 @@ def main():
 
     train_time = 0
     train_metrics = []
-    # TODO: figure out training duration
-    resume_epoch = (resume_step // (steps_per_epoch * grad_accum_steps))
-    epochs = tqdm(range(num_epochs), desc=f"Epoch ... (1/{num_epochs})", position=0)
+    resume_epoch = resume_step // (steps_per_epoch * grad_accum_steps)
+    epochs = tqdm(range(num_epochs), desc=f"Epoch ... ({resume_epoch+1}/{num_epochs})", position=0)
+    logger.info(f"Skipping to epoch {resume_epoch} step {resume_step // grad_accum_steps}")
     for epoch in epochs:
         # ======================== Training ================================
-        logger.info(f"Skipping to epoch {resume_epoch} step {resume_step // grad_accum_steps}")
-        if epoch <  resume_epoch - 1:
+        if epoch <  resume_epoch:
             continue
         
         train_start = time.time()
