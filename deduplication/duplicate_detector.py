@@ -6,11 +6,20 @@ import tqdm
 
 
 class DocumentID:
-    def __init__(self, index, repo_name, file_name, code_hash):
+    def __init__(self, index, repo_name, file_name):
         self.index = index
         self.repo_name = repo_name
         self.file_name = file_name
-        self.code_hash = code_hash
+
+    def __eq__(self, other):
+        return (
+            self.index == other.index
+            and self.repo_name == other.repo_name
+            and self.file_name == other.file_name
+        )
+
+    def __hash__(self):
+        return hash(f"{self.index}{self.repo_name}{self.file_name}")
 
 
 class DuplicateDetector:
