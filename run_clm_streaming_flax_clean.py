@@ -32,11 +32,10 @@ from pathlib import Path
 from typing import Callable, Optional
 import json
 import shutil
-from collections import defaultdict
 from flax import training
 import numpy as np
 import datasets
-from datasets import Dataset, load_dataset
+from datasets import load_dataset
 from tqdm import tqdm
 
 import jax
@@ -44,6 +43,7 @@ import jax.profiler
 import jax.numpy as jnp
 import optax
 import transformers
+import flax
 from flax import jax_utils, traverse_util
 from flax.jax_utils import unreplicate
 from flax.training import train_state
@@ -206,77 +206,6 @@ class TrainState(train_state.TrainState):
     def replicate(self):
         return jax_utils.replicate(self).replace(dropout_rng=shard_prng_key(self.dropout_rng))
 
-class MultiStepsTrainState(train_state.TrainState):
-    dropout_rng: jnp.ndarray
-
-    def replicate(self):
-        return jax_utils.replicate(self).replace(dropout_rng=shard_prng_key(self.dropout_rng))
-
-    def 
-
-# the below functions are not used now, probably to be removed
-def generate_batch_splits(samples_idx: jnp.ndarray, batch_size: int) -> jnp.ndarray:
-    num_samples = len(samples_idx)
-    samples_to_remove = num_samples % batch_size
-
-    if samples_to_remove != 0:
-        samples_idx = samples_idx[:-samples_to_remove]
-    sections_split = num_samples // batch_size
-    batch_idx = np.split(samples_idx, sections_split)
-    return batch_idx
-
-
-def advance_iter_and_group_samples(train_iterator, num_samples, max_seq_length):
-    """
-    The training iterator is advanced so that after groupifying the samples,
-    `num_samples` of length `max_seq_length` are returned.
-    """
-    num_total_tokens = max_seq_length * num_samples
-    samples = defaultdict(list)
-
-    i = 0
-    while i < num_total_tokens:
-        tokenized_samples = next(train_iterator)
-        i += len(tokenized_samples["input_ids"])
-
-        # concatenate tokenized samples to list
-        samples = {k: samples[k] + tokenized_samples[k] for k in tokenized_samples.keys()}
-
-    # Concatenated tokens are split to lists of length `max_seq_length`.
-    # Note that remainedr of % max_seq_length are thrown away.
-    def group_texts(examples):
-        result = {
-            k: [t[i : i + max_seq_length] for i in range(0, num_total_tokens, max_seq_length)]
-            for k, t in examples.items()
-        }
-        return result
-
-    grouped_samples = group_texts(samples)
-    return grouped_samples
-
-def data_loader(rng: jax.random.PRNGKey, dataset: Dataset, batch_size: int, shuffle: bool = False):
-    """
-    Returns batches of size `batch_size` from truncated `dataset`, sharded over all local devices.
-    Shuffle batches if `shuffle` is `True`.
-    """
-    steps_per_epoch = len(dataset) // batch_size
-
-    if shuffle:
-        batch_idx = jax.random.permutation(rng, len(dataset))
-    else:
-        batch_idx = jnp.arange(len(dataset))
-
-    batch_idx = batch_idx[: steps_per_epoch * batch_size]  # Skip incomplete batch.
-    batch_idx = batch_idx.reshape((steps_per_epoch, batch_size))
-
-    for idx in batch_idx:
-        batch = dataset[idx]
-        batch = {k: jnp.array(v) for k, v in batch.items()}
-
-        batch = shard(batch)
-
-        yield batch
-
 
 def write_train_metric(summary_writer, train_metrics, train_time, step):
     summary_writer.scalar("train_time", train_time, step)
@@ -341,6 +270,14 @@ def save_model_checkpoint(model, save_dir, state, with_opt:bool=True, push_to_hu
             json.dump({"step": state.step.item()}, f)
     logger.info("checkpoint saved")
 
+
+def reinstantiate_states(opt_state):
+    new_state = []
+    for state in opt_state:
+        cls = getattr(optax, type(state).__name__)
+        new_state.append(cls(**{k:getattr(state, k) for k in state._fields}))
+    return new_state
+
 def restore_model_checkpoint(save_dir, state):
     logger.info(f"RESTORING CHECKPOINT FROM {save_dir}...")
     with open(os.path.join(save_dir, "flax_model.msgpack"), "rb") as f:
@@ -354,7 +291,15 @@ def restore_model_checkpoint(save_dir, state):
     step = training_state["step"]
 
     logger.info("checkpoint restored")
-    return state.replace(step=step, params=params, opt_state=opt_state), step
+    # reinstantiate inner opt state to avoid type conflict
+    if hasattr(opt_state, "inner_opt_state"):
+        print("restoring multisteps optimizer")
+        inner_opt_state = reinstantiate_states(opt_state.inner_opt_state)
+        ms_state_dict = {k:getattr(state.opt_state, k) for k in state.opt_state._fields}
+        ms_state_dict["inner_opt_state"] = inner_opt_state
+        opt_state = optax.MultiStepsState(**ms_state_dict)
+
+    return state.replace(step=step, params=params, opt_state=opt_state)
 
 def rotate_checkpoints(ckpt_dir:str, save_total_limit:int):
     "Removes older checkpoints so that `save_total_limit` checkpoints are kept"
@@ -422,6 +367,7 @@ def main():
         # Downloading and loading a dataset from the hub.
         train_dataset = load_dataset(
             data_args.dataset_name,
+            data_args.dataset_config_name,
             data_dir=data_args.data_dir,
             cache_dir=model_args.cache_dir, 
             streaming=True,
@@ -429,6 +375,7 @@ def main():
         )
         eval_dataset = load_dataset(
             data_args.dataset_name,
+            data_args.dataset_config_name,
             data_dir=data_args.data_dir,
             cache_dir=model_args.cache_dir, 
             streaming=True,
@@ -639,7 +586,7 @@ def main():
     state = TrainState.create(apply_fn=model.__call__, params=model.params, tx=optimizer, dropout_rng=dropout_rng)
     
     if training_args.resume_from_checkpoint:
-        state = restore_checkpoint(training_args.resume_from_checkpoint, state)
+        state = restore_model_checkpoint(training_args.resume_from_checkpoint, state)
         resume_step = mb_item(state.step)
     else:
         resume_step = 0
@@ -751,7 +698,8 @@ def main():
                 prefetch_buffer=data_args.prefetch_buffer,
                 shuffle=False,
             )
-            for _ in tqdm(range(eval_steps), desc="Evaluating...", position=2, leave=False):
+            eval_pbar = tqdm(range(eval_steps), desc="Evaluating...", position=2, leave=False)
+            for _ in eval_pbar:
                 # Model forward
                 batch = shard(next(eval_loader))
                 metrics = p_eval_step(state.params, batch)
@@ -769,8 +717,8 @@ def main():
             eval_loader.terminate()
             # Print metrics and update progress bar
             desc = f"Step... ({cur_step//grad_accum_steps} | Eval Loss: {eval_metrics['loss']} | Eval Perplexity: {eval_metrics['perplexity']})"
-            steps.write(desc)
-            steps.desc = desc
+            eval_pbar.write(desc)
+            eval_pbar.desc = desc
 
             # Save metrics
             if has_tensorboard and jax.process_index() == 0:
@@ -783,11 +731,11 @@ def main():
         if cur_step % (training_args.save_steps * grad_accum_steps) == 0 and cur_step > 0:
             # save checkpoint after each epoch and push checkpoint to the hub
             if jax.process_index() == 0:
-                save_model_checkpoint(model, training_args.output_dir, state, with_opt=False,
+                save_model_checkpoint(model, training_args.output_dir, state, with_opt=model_args.save_optimizer,
                                       push_to_hub=training_args.push_to_hub)
-                if model_args.save_optimizer:
+                # if model_args.save_optimizer:
                     # this saves full state including optimizer
-                    save_checkpoint(training_args.output_dir, jax_utils.unreplicate(state), cur_step, keep=training_args.save_total_limit, overwrite=True)
+                    # save_checkpoint(training_args.output_dir, jax_utils.unreplicate(state), cur_step, keep=training_args.save_total_limit, overwrite=True)
                 if training_args.save_total_limit is not None:
                     rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
     
@@ -796,7 +744,7 @@ def main():
     save_model_checkpoint(model, training_args.output_dir, state, with_opt=False,
                           push_to_hub=training_args.push_to_hub)
 
-
+    logger.info("***Training comleted")
 
 
 if __name__ == "__main__":
