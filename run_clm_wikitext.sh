@@ -1,6 +1,6 @@
 #! /bin/bash
 ./run_clm_flax.py \
-    --output_dir $HOME/tmp/gpt-neo-125M-test \
+    --output_dir $HOME/tmp/gpt-neo-125M-test-2 \
     --model_name_or_path="EleutherAI/gpt-neo-125M" \
     --dataset_name="wikitext" \
     --dataset_config_name="wikitext-2-raw-v1" \
@@ -21,7 +21,7 @@
     --logging_steps="10" \
     --eval_steps="10" \
     --push_to_hub="False" \
-    --report_to="wandb" \
+    --report_to="none" \
     --run_name="test-non-streaming" \
     --dtype="bfloat16" \
     --skip_memory_metrics="False" \
@@ -29,6 +29,7 @@
     --save_strategy epoch \
     --save_total_limit 2 \
     --gradient_accumulation_steps 8 \
-    # --resume_from_checkpoint $HOME/gpt-neo-125M-code-clippy/ckpt_201 \
+    --save_optimizer true \
+    --resume_from_checkpoint $HOME/tmp/gpt-neo-125M-test-2/ckpt-2591 \
     # --max_train_samples="10000" \
     # --max_eval_samples="1000"
