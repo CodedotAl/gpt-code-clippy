@@ -56,6 +56,7 @@ from transformers import (
     HfArgumentParser,
     TrainingArguments,
     is_tensorboard_available,
+    IntervalStrategy
 )
 from transformers.testing_utils import CaptureLogger
 
@@ -102,6 +103,10 @@ class ModelArguments:
         metadata={
             "help": "Floating-point format in which the model weights should be initialized and trained. Choose one of `[float32, float16, bfloat16]`."
         },
+    )
+    save_optimizer: Optional[bool] = field(
+        default=True,
+        metadata={"help": "Whether to store full train state including optimizer."},
     )
 
 
@@ -241,16 +246,19 @@ def mb_item(x):
     return x.item() if hasattr(x, "item") else x
 
 #checkpoint functions
-def save_model_checkpoint(model, save_dir, state, with_opt:bool=False, push_to_hub:bool=False, **kwargs):
+def save_model_checkpoint(model, save_dir, state, with_opt:bool=True, push_to_hub:bool=False):
+    """
+    If `push_to_hub` is True, will save to `save_dir`. Otherwise will save to `save_dir/ckpt-{step}`.
+    """
     state = jax_utils.unreplicate(state)
     logger.info(f"SAVING CHECKPOINT IN {save_dir}...")
-    save_dir = f"{save_dir}/ckpt-{mb_item(state.step)-1}"
+    if not push_to_hub:
+        save_dir = f"{save_dir}/ckpt-{mb_item(state.step)-1}"
     model.save_pretrained(
         save_dir,
         params=state.params,
         push_to_hub=push_to_hub,
         commit_message=f"Saving weights and logs at step {mb_item(state.step)-1}",
-        **kwargs
     )
     if with_opt:
         with open(os.path.join(save_dir, "opt_state.msgpack"), "wb") as f:
@@ -258,7 +266,15 @@ def save_model_checkpoint(model, save_dir, state, with_opt:bool=False, push_to_h
         with open(os.path.join(save_dir, "training_state.json"), "w") as f:
             json.dump({"step": state.step.item()}, f)
     logger.info("checkpoint saved")
-        
+
+
+def reinstantiate_states(opt_state):
+    new_state = []
+    for state in opt_state:
+        cls = getattr(optax, type(state).__name__)
+        new_state.append(cls(**{k:getattr(state, k) for k in state._fields}))
+    return new_state
+
 def restore_model_checkpoint(save_dir, state):
     logger.info(f"RESTORING CHECKPOINT FROM {save_dir}...")
     with open(os.path.join(save_dir, "flax_model.msgpack"), "rb") as f:
@@ -272,7 +288,15 @@ def restore_model_checkpoint(save_dir, state):
     step = training_state["step"]
 
     logger.info("checkpoint restored")
-    return state.replace(step=step, params=params, opt_state=opt_state), step
+    # reinstantiate inner opt state to avoid type conflict
+    if hasattr(opt_state, "inner_opt_state"):
+        print("restoring state of multisteps optimizer")
+        inner_opt_state = reinstantiate_states(opt_state.inner_opt_state)
+        ms_state_dict = {k:getattr(state.opt_state, k) for k in state.opt_state._fields}
+        ms_state_dict["inner_opt_state"] = inner_opt_state
+        opt_state = optax.MultiStepsState(**ms_state_dict)
+
+    return state.replace(step=step, params=params, opt_state=opt_state)
 
 def rotate_checkpoints(ckpt_dir:str, save_total_limit:int):
     "Removes older checkpoints so that `save_total_limit` checkpoints are kept"
@@ -284,6 +308,7 @@ def rotate_checkpoints(ckpt_dir:str, save_total_limit:int):
     for ckpt in ckpts_to_delete:
         logger.info(f"Deleting older checkpoint [{ckpt}] due to save_total_limit ({save_total_limit})")
         shutil.rmtree(ckpt)
+
 
 
 def main():
@@ -518,6 +543,7 @@ def main():
         try:
             import wandb
             wandb.init(
+                name=training_args.run_name,
                 entity="wandb", 
                 project="hf-flax-gpt-neo-copilot",
                 sync_tensorboard=True
@@ -580,6 +606,10 @@ def main():
             eps=training_args.adam_epsilon,
             weight_decay=training_args.weight_decay,
             mask=decay_mask_fn,
+        )
+        optimizer = optax.chain(
+            optax.clip_grad_by_global_norm(1.),
+            optimizer
         )
     if training_args.gradient_accumulation_steps > 1:
         optimizer = optax.MultiSteps(optimizer, training_args.gradient_accumulation_steps)
@@ -654,6 +684,9 @@ def main():
     epochs = tqdm(range(num_epochs), desc=f"Epoch ... (1/{num_epochs})", position=0)
     for epoch in epochs:
         # ======================== Training ================================
+        if epoch < resume_step // steps_per_epoch:
+            continue
+        
         train_start = time.time()
 
         # Create sampling rng
@@ -727,20 +760,28 @@ def main():
                     _metrics = {f"eval_{k}":mb_item(v) for k, v in eval_metrics.items()}
                     wandb.log({"eval_step":cur_step, **_metrics})
 
-            if cur_step % (training_args.save_steps * grad_accum_steps) == 0 and cur_step > 0:
+            if (cur_step % (training_args.save_steps * grad_accum_steps) == 0 and 
+                training_args.save_strategy == IntervalStrategy.STEPS and 
+                cur_step > 0):
                 # save checkpoint after each epoch and push checkpoint to the hub
                 if jax.process_index() == 0:
-                    save_model_checkpoint(model, training_args.output_dir, state, with_opt=False,
-                                      push_to_hub=training_args.push_to_hub, repo_name_or_path=training_args.output_dir)
-                    # this saves full state including optimizer
-#                     save_checkpoint(training_args.output_dir, state, state.step, keep=training_args.save_total_limit, overwrite=False)
+                    save_model_checkpoint(model, training_args.output_dir, state, with_opt=model_args.save_optimizer,
+                                          push_to_hub=training_args.push_to_hub)
                     if training_args.save_total_limit is not None:
                         rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
-    
+        
+        if training_args.save_strategy == IntervalStrategy.EPOCH:
+            # save checkpoint after each epoch and push checkpoint to the hub
+            if jax.process_index() == 0:
+                save_model_checkpoint(model, training_args.output_dir, state, with_opt=model_args.save_optimizer,
+                                        push_to_hub=training_args.push_to_hub)
+                if training_args.save_total_limit is not None:
+                    rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
+
+
     # save model after training is over
-    save_model_checkpoint(model, training_args.output_dir, state, with_opt=False, push_to_hub=training_args.push_to_hub)
-
-
+    if jax.process_index() == 0:
+        save_model_checkpoint(model, training_args.output_dir, state, with_opt=model_args.save_optimizer, push_to_hub=training_args.push_to_hub)
 
 
 if __name__ == "__main__":
