@@ -35,7 +35,15 @@ class PrefetchDataloaderTread(threading.Thread):
         self.queue = queue.Queue(prefetch_buffer)
         self.rem = defaultdict(list)
         self.start()
-        
+
+    def make_iter(self):
+        if self.shuffle:
+            shuffled_dataset = self.dataset.shuffle(self.shuffle_buffer, seed=self.seed)
+            self.seed += 1
+            self.ds_iter = iter(shuffled_dataset)
+        else:
+            self.ds_iter = iter(self.dataset)
+
     def __next__(self):
         batch = self.queue.get()
         return batch
@@ -49,7 +57,13 @@ class PrefetchDataloaderTread(threading.Thread):
             l = len(sample["input_ids"])
             max_length = self.max_length
             while l < max_length:
-                next_sample = next(self.ds_iter)
+                try:
+                    next_sample = next(self.ds_iter)
+                except StopIteration:
+                    # reset generator if a pass through dataset is completed
+                    self.make_iter()
+                    next_sample = next(self.ds_iter)
+                    
                 l += len(next_sample["input_ids"])
                 sample = {k:sample[k]+next_sample[k] for k in next_sample.keys()}
             
