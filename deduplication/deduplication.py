@@ -1,89 +1,56 @@
 import argparse
-from duplicate_detector import DocumentID, DuplicateDetector
-import os
+import datasets
 import lm_dataformat
-import tqdm
+import re
 
 parser = argparse.ArgumentParser(description="Deduplicate a list of files")
 parser.add_argument("--data_dir", type=str, required=True)
 parser.add_argument("--output_dir", type=str, required=True)
-parser.add_argument("--set_similarity_threshold", type=float, default=0.8)
-parser.add_argument("--multiset_similarity_threshold", type=float, default=0.7)
-parser.add_argument("--min_num_tokens_per_document", type=int, default=20)
 parser.add_argument("--archive_commit_freq", type=int, default=10_000)
 args = parser.parse_args()
 
-data_files = [
-    os.path.join(args.data_dir, data_file) for data_file in os.listdir(args.data_dir)
-]
-
-duplicate_detector = DuplicateDetector(
-    args.set_similarity_threshold,
-    args.multiset_similarity_threshold,
-    args.min_num_tokens_per_document,
+dataset = datasets.load_dataset(
+    "script.py", data_dir=args.data_dir, split="train", streaming=True
 )
 
-rdr = lm_dataformat.Reader(data_files)
-
-for i, doc in enumerate(
-    tqdm.tqdm(
-        rdr.stream_data(get_meta=True, threaded=True),
-        desc="adding files to duplicate detector",
-    )
-):
-    code, metadata = doc
-    document_id = DocumentID(
-        index=i,
-        repo_name=metadata["repo_name"],
-        file_name=metadata["file_name"],
-    )
-    duplicate_detector.add_file(document_id, code)
-
-duplicate_clusters = duplicate_detector.get_duplicate_clusters()
-duplicate_detector.print_duplicate_clusters_stats(duplicate_clusters)
+print(f"n examples before deduplication: {len(dataset)}")
 
 
-with open("duplicate_clusters.txt", "w+") as f:
-    for duplicate_cluster in duplicate_clusters:
-        cluster_str = ",".join(
-            [
-                f"{document_id.index}|{document_id.repo_name}|{document_id.file_name}"
-                for document_id in duplicate_cluster
-            ]
-        )
-        f.write(f"{cluster_str}\n")
+def get_variables(examples):
+    """Convert a code string to a list of variables.
+    We assume a variable is a 'word' with only alphanumeric characters in it."""
+    variables = [" ".join(re.split(r"\W+", text)) for text in examples["text"]]
+    return {"variables": variables}
 
-with open("documents_to_exclude.txt", "w+") as f:
-    document_ids_to_exclude = duplicate_detector.get_documents_to_exclude(
-        duplicate_clusters
-    )
-    for document_id in document_ids_to_exclude:
-        f.write(
-            f"{document_id.index}|{document_id.repo_name}|{document_id.file_name}\n"
-        )
 
-rdr = lm_dataformat.Reader(data_files)
+dataset = dataset.map(get_variables, batched=True)
+
+uniques = set(dataset.unique("variables"))
+n_uniques = len(uniques)
+
+print(f"found {n_uniques} unique files")
+
+
+def check_uniques(example, uniques):
+    """If an example is in uniques, return True and remove it from uniques."""
+    if example["variables"] in uniques:
+        uniques.remove(example["variables"])
+        return True
+    else:
+        return False
+
+
+deduplicated_dataset = dataset.filter(check_uniques, fn_kwargs={"uniques": uniques})
+
+assert len(deduplicated_dataset) == n_uniques
+
 ar = lm_dataformat.Archive(args.output_dir)
-j = 0
 
-for i, doc in enumerate(
-    tqdm.tqdm(
-        rdr.stream_data(get_meta=True, threaded=True), desc="creating deduplicated data"
-    )
-):
-    code, metadata = doc
-
-    document_id = DocumentID(
-        index=i,
-        repo_name=metadata["repo_name"],
-        file_name=metadata["file_name"],
-    )
-
-    if document_id not in document_ids_to_exclude:
-        ar.add_data(code, meta=metadata)
-        j += 1
-
-    if j > 0 and j % args.archive_commit_freq == 0:
+for i, example in enumerate(deduplicated_dataset):
+    code = example["text"]
+    del example["text"]
+    del example["variables"]
+    ar.add_data(code, meta=example)
+    if i > 0 and i % args.archive_commit_freq == 0:
         ar.commit()
-
 ar.commit()
