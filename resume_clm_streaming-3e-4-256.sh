@@ -28,7 +28,7 @@
     --save_total_limit 2 \
     --gradient_accumulation_steps 4 \
     --report_to="wandb" \
-    --run_name="gpt-code-clippy-125m-3e-4-256" \
+    --run_name="resume-test" \
     --max_eval_samples 2000 \
     --save_optimizer true \
     --resume_from_checkpoint $HOME/gpt-code-clippy-125M-256 \
