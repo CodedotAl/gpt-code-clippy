@@ -9,9 +9,7 @@ parser.add_argument("--output_dir", type=str, required=True)
 parser.add_argument("--archive_commit_freq", type=int, default=10_000)
 args = parser.parse_args()
 
-dataset = datasets.load_dataset(
-    "script.py", data_dir=args.data_dir, split="train", streaming=True
-)
+dataset = datasets.load_dataset("script.py", data_dir=args.data_dir, split="train")
 
 print(f"n examples before deduplication: {len(dataset)}")
 
