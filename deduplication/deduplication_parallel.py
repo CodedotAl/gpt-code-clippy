@@ -26,6 +26,7 @@ duplicate_detector = DuplicateDetector(
 
 rdr = lm_dataformat.Reader(data_files)
 
+
 def _process_document(i, doc):
     code, metadata = doc
     document_id = DocumentID(
@@ -35,25 +36,18 @@ def _process_document(i, doc):
     )
     duplicate_detector.add_file(document_id, code)
 
-Parallel(n_jobs=-1)(
-    delayed(_process_document)(i, doc)
-    for i, doc in enumerate(tqdm.tqdm(rdr.stream_data(get_meta=True), desc="adding files to duplicate detector"))
-)
 
-# for i, doc in enumerate(
-#     tqdm.tqdm(rdr.stream_data(get_meta=True), desc="adding files to duplicate detector")
-# ):
-#     code, metadata = doc
-#     document_id = DocumentID(
-#         index=i,
-#         repo_name=metadata["repo_name"],
-#         file_name=metadata["file_name"],
-#     )
-#     duplicate_detector.add_file(document_id, code)
+Parallel(n_jobs=-1, require="sharedmem")(
+    delayed(_process_document)(i, doc)
+    for i, doc in enumerate(
+        tqdm.tqdm(
+            rdr.stream_data(get_meta=True), desc="adding files to duplicate detector"
+        )
+    )
+)
 
 duplicate_clusters = duplicate_detector.get_duplicate_clusters()
 duplicate_detector.print_duplicate_clusters_stats(duplicate_clusters)
-
 
 with open("duplicate_clusters.txt", "w+") as f:
     for duplicate_cluster in duplicate_clusters:
