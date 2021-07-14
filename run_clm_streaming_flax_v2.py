@@ -359,6 +359,23 @@ def rotate_checkpoints(ckpt_dir:str, save_total_limit:int):
         logger.info(f"Deleting older checkpoint [{ckpt}] due to save_total_limit ({save_total_limit})")
         shutil.rmtree(ckpt)
 
+# code used for resuming to work
+def reinstantiate_states(opt_state):
+    new_state = []
+    for state in opt_state:
+        cls = getattr(optax, type(state).__name__)
+        new_state.append(cls(**{k:getattr(state, k) for k in state._fields}))
+    return new_state
+
+def _state_update(state):
+    inner_opt_state = state.opt_state.inner_opt_state
+
+    new_inner_opt_state = reinstantiate_states(inner_opt_state)
+
+    ms_state_dict = {k:getattr(state.opt_state, k) for k in state.opt_state._fields}
+    ms_state_dict["inner_opt_state"] = new_inner_opt_state
+    return  state.replace(opt_state=optax.MultiStepsState(**ms_state_dict))
+
 def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
@@ -660,6 +677,9 @@ def main():
     
     if training_args.resume_from_checkpoint:
         state = restore_checkpoint(training_args.resume_from_checkpoint, state)
+
+        state = _state_update(state)
+
         resume_step = mb_item(state.step)
     else:
         resume_step = 0
@@ -720,7 +740,7 @@ def main():
     train_time = 0
     train_metrics = []
     # TODO: figure out training duration
-    steps = tqdm(range(training_args.max_steps), position=0, initial=resume_step)
+    steps = tqdm(range(training_args.max_steps), position=0, initial=resume_step // grad_accum_steps)
     for step in range(total_train_steps):
         # ======================== Training ================================
         train_start = time.time()
