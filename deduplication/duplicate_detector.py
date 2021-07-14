@@ -4,6 +4,7 @@ from SetSimilaritySearch import all_pairs
 import numpy as np
 import tqdm
 from typing import List, Set, Tuple
+import joblib
 
 
 class DocumentID:
@@ -70,14 +71,20 @@ class DuplicateDetector:
             similarity_func_name="jaccard",
             similarity_threshold=self.set_similarity_threshold,
         )
-        for index_1, index_2, _ in tqdm.tqdm(
-            similar_pairs, desc="computing duplicates..."
-        ):
-            if (
-                self.get_multiset_jaccard_similarity(index_1, index_2)
-                >= self.multiset_similarity_threshold
-            ):
+
+        def worker(index_1, index_2):
+            similarity = self.get_multiset_jaccard_similarity(index_1, index_2)
+            if similarity > self.multiset_similarity_threshold:
                 yield index_1, index_2
+            else:
+                yield None, None
+
+        parallel_pool = joblib.Parallel(n_jobs=joblib.cpu_count(), verbose=100)(
+            joblib.delayed(worker)(index_1, index_2)
+            for index_1, index_2, _ in similar_pairs
+        )
+
+        yield from parallel_pool
 
     def get_multiset_jaccard_similarity(self, index_1: int, index_2: int) -> float:
         """Calculate the multiset Jaccard similarity between two documents."""
@@ -95,12 +102,12 @@ class DuplicateDetector:
         # stores duplicate clusters, list of set of DocumentID
         duplicate_clusters = []
 
-        # get the duplicate pairs
+        # get pairwise relationships from duplicate pairs
         pairwise_relationships = collections.defaultdict(list)
         for index_1, index_2 in self.get_duplicate_pairs():
-            assert index_1 != index_2
-            pairwise_relationships[index_1].append(index_2)
-            pairwise_relationships[index_2].append(index_1)
+            if index_1 is not None and index_2 is not None:
+                pairwise_relationships[index_1].append(index_2)
+                pairwise_relationships[index_2].append(index_1)
 
         # set of which documents have duplicates
         documents_with_duplicates = set(pairwise_relationships.keys())
