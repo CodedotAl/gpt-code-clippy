@@ -1,6 +1,6 @@
 # Deduplication
 
-A tool for checking code duplicates. Taken from: https://github.com/microsoft/dpu-utils/blob/master/python/dpu_utils/codeutils/deduplication, see also: https://arxiv.org/abs/1812.06469.
+A tool for checking code duplicates by assuming two files with the same sequence of variables are duplicates.
 
 Usage:
 
