@@ -285,8 +285,11 @@ def fake_update(state):
 def reinstantiate_states(opt_state):
     new_state = []
     for state in opt_state:
-        cls = getattr(optax, type(state).__name__)
-        new_state.append(cls(**{k:getattr(state, k) for k in state._fields}))
+        if isinstance(state, list):
+            new_state.append(reinstantiate_states(state))
+        else:
+            cls = getattr(optax, type(state).__name__)
+            new_state.append(cls(**{k:getattr(state, k) for k in state._fields}))
     return new_state
 
 def restore_model_checkpoint(save_dir, state):
@@ -622,7 +625,7 @@ def main():
             mask=decay_mask_fn,
         )
         optimizer = optax.chain(
-            optax.clip_grad_by_global_norm(1.),
+            optax.clip_by_global_norm(1.),
             optimizer
         )
     if training_args.gradient_accumulation_steps > 1:
@@ -699,7 +702,8 @@ def main():
     train_metrics = []
     resume_epoch = resume_step // (steps_per_epoch * grad_accum_steps)
     epochs = tqdm(range(num_epochs), desc=f"Epoch ... ({resume_epoch+1}/{num_epochs})", position=0)
-    logger.info(f"Skipping to epoch {resume_epoch} step {resume_step // grad_accum_steps}")
+    if resume_step != 0:
+        logger.info(f"Skipping to epoch {resume_epoch} step {resume_step // grad_accum_steps}")
     for epoch in epochs:
         # ======================== Training ================================
         if epoch <  resume_epoch:
