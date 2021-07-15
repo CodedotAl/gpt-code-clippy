@@ -290,8 +290,11 @@ def fake_update(state):
 def reinstantiate_states(opt_state):
     new_state = []
     for state in opt_state:
-        cls = getattr(optax, type(state).__name__)
-        new_state.append(cls(**{k:getattr(state, k) for k in state._fields}))
+        if isinstance(state, list):
+            new_state.append(reinstantiate_states(state))
+        else:
+            cls = getattr(optax, type(state).__name__)
+            new_state.append(cls(**{k:getattr(state, k) for k in state._fields}))
     return new_state
 
 def restore_model_checkpoint(save_dir, state):
