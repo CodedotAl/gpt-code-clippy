@@ -12,30 +12,34 @@ from human_eval.data import write_jsonl, read_problems
 from pathlib import Path
 from metrics.extrinsic_eval import compute_metrics
 from subprocess import check_output
-from transformers import AutoTokenizer, AutoModelWithLMHead
+from transformers import (
+    AutoTokenizer,
+    FlaxGPTNeoForCausalLM,
+)
 
 bleu = load_metric("sacrebleu")
-tokenizer = AutoTokenizer.from_pretrained("EleutherAI/gpt-neo-125M")
-model = AutoModelWithLMHead.from_pretrained(
-    "/home/nathan/gpt-code-clippy/data/APPS/models/1.5B"
+# tokenizer = AutoTokenizer.from_pretrained("EleutherAI/gpt-neo-125M")
+# model = AutoModelWithLMHead.from_pretrained(
+#     "/home/nathan/gpt-code-clippy/data/APPS/models/1.5B"
+# )
+
+MAX_TOKENs = 1_024
+model_name_or_path = "EleutherAI/gpt-neo-125M"
+
+tokenizer = AutoTokenizer.from_pretrained(
+    model_name_or_path, padding_side="left", pad_token="<|endoftext|>"
 )
+model = FlaxGPTNeoForCausalLM.from_pretrained(
+    model_name_or_path,
+    pad_token_id=50256,
+).to("cuda")
 
 
 def generate_text(prompt):
-    # print(prompt)
-    input_ids = torch.LongTensor(tokenizer.encode(prompt, verbose=False)).unsqueeze(
-        0
-    )  # .cuda()
-    output_ids = model.generate(
-        input_ids,
-        num_beams=2,
-        early_stopping=True,
-        max_length=1024 - len(input_ids),
-    )
-    output_str = tokenizer.decode(output_ids[0])
-    return output_str
-    # # "a", "=", "b", "\n", "y", "=", "a", "+", "1"
-    # return "a = b \n y = a + 1"
+    inputs = tokenizer(prompt, return_tensors="jax").to("cuda")
+    output_seq = model.generate(input_ids=inputs.input_ids, max_length=1_024)
+
+    return tokenizer.decode(output_seq["sequences"][0])
 
 
 def _eval_concode(path):
