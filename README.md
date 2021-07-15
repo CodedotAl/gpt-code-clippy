@@ -29,7 +29,7 @@ I believe the standard CLM language model script would do for this.
 We can make use of https://www.github.com/huggingface/transformers/tree/master/examples%2Fflax%2Flanguage-modeling%2Frun_clm_flax.py
 
 for training the scripts you can run:
-`python streaming_flax.py `
+`python run_clm_streaming_flax_v2.py `
 
 
 ## 6. Usage
