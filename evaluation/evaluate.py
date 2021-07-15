@@ -4,13 +4,14 @@ import pandas as pd
 
 # import apps.eval.reident
 
-from apps_utils.generate_gpt_codes import generate_prompt
-from apps_utils.test_one_solution import eval_and_save_problems
+# from apps_utils.generate_gpt_codes import generate_prompt
+# from apps_utils.test_one_solution import eval_and_save_problems
 from datasets import load_dataset, load_metric
 from fastcore.script import *
-from human_eval.data import write_jsonl, read_problems
+from human_eval.data import HUMAN_EVAL, write_jsonl, read_problems
+from human_eval.evaluation import evaluate_functional_correctness
 from pathlib import Path
-from metrics.extrinsic_eval import compute_metrics
+# from metrics.extrinsic_eval import compute_metrics
 from subprocess import check_output
 from transformers import (
     AutoTokenizer,
@@ -32,11 +33,11 @@ tokenizer = AutoTokenizer.from_pretrained(
 model = FlaxGPTNeoForCausalLM.from_pretrained(
     model_name_or_path,
     pad_token_id=50256,
-).to("cuda")
+)
 
 
 def generate_text(prompt):
-    inputs = tokenizer(prompt, return_tensors="jax").to("cuda")
+    inputs = tokenizer(prompt, return_tensors="jax")#.to("cuda")
     output_seq = model.generate(input_ids=inputs.input_ids, max_length=1_024)
 
     return tokenizer.decode(output_seq["sequences"][0])
@@ -113,7 +114,8 @@ def _eval_apps(path):
 
 
 def _eval_human_eval(path):
-    problems = read_problems()
+
+    problems = read_problems(str(path))
     num_samples_per_task = 1
     samples = [
         dict(
@@ -125,13 +127,14 @@ def _eval_human_eval(path):
     ]
     write_jsonl("human_eval.jsonl", samples)
     # execute bash command to run eval script
-    results = check_output(
-        [
-            "python",
-            path / "evaluate_functional_correctness.py",
-            "human_eval.jsonl",
-        ]
-    ).decode("utf-8")
+    results = evaluate_functional_correctness("human_eval.jsonl", [1], 4, 3.0, str(path))
+    # results = check_output(
+    #     [
+    #         "python",
+    #         path / "evaluate_functional_correctness.py",
+    #         "human_eval.jsonl",
+    #     ]
+    # ).decode("utf-8")
 
     print(results)
 
@@ -146,8 +149,8 @@ def main(
     apps_path = Path(apps_path)
     human_eval_path = Path(human_eval_path)
     # _eval_concode(concode_path)
-    # _eval_human_eval(human_eval_path)
-    _eval_apps(apps_path)
+    _eval_human_eval(human_eval_path)
+    # _eval_apps(apps_path)
     # dataset = load_dataset("json", data_files=str(concode_path / "test.json"))
     # print(dataset)
     # results = bleu.compute(predictions=predictions, references=references)
