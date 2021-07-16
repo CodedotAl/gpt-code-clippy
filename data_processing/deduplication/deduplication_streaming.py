@@ -20,14 +20,18 @@ def get_variables(example):
     return variables
 
 
+def get_hash(example):
+    variables = " ".join(re.split(r"\W+", example["text"]))
+    return hash(variables)
+
+
 uniques = set()
 ar = lm_dataformat.Archive(args.output_dir)
 i = 0
-
 for example in tqdm.tqdm(dataset):
-    variables = get_variables(example)
-    if variables not in uniques:
-        uniques.add(variables)
+    h = get_hash(example)
+    if h not in uniques:
+        uniques.add(h)
         code = example["text"]
         del example["text"]
         ar.add_data(code, meta=example)
