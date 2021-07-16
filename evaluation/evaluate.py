@@ -25,8 +25,9 @@ bleu = load_metric("sacrebleu")
 #     "/home/nathan/gpt-code-clippy/data/APPS/models/1.5B"
 # )
 
-MAX_TOKENs = 1_024
-model_name_or_path = "EleutherAI/gpt-neo-125M"
+MAX_TOKENs = 256
+model_name_or_path = "EleutherAI/gpt-neo-1.3B"# "flax-community/gpt-code-clippy-125M-bs2048-raw" # "EleutherAI/gpt-neo-125M"
+branch = "main"
 
 tokenizer = AutoTokenizer.from_pretrained(
     model_name_or_path, padding_side="left", pad_token="<|endoftext|>"
@@ -34,13 +35,14 @@ tokenizer = AutoTokenizer.from_pretrained(
 model = FlaxGPTNeoForCausalLM.from_pretrained(
     model_name_or_path,
     pad_token_id=50256,
+    revision=branch
 )
 
 
 def generate_text(prompt):
     inputs = tokenizer(prompt, return_tensors="jax")  # .to("cuda")
-    output_seq = model.generate(input_ids=inputs.input_ids, max_length=MAX_TOKENs)
-    output = tokenizer.decode(output_seq["sequences"][0])
+    output_seq = model.generate(input_ids=inputs.input_ids, max_length=MAX_TOKENs, early_stopping=True)
+    output = tokenizer.decode(output_seq["sequences"][0])#, skip_special_tokens=True, clean_up_tokenization_spaces=False)
     # print(output)
     return output
 
@@ -129,7 +131,7 @@ def _eval_human_eval(path):
     ]
     write_jsonl("human_eval.jsonl", samples)
     # execute bash command to run eval script
-    results = evaluate_functional_correctness("human_eval.jsonl", [1], 4, 3.0, str(path))
+    results = evaluate_functional_correctness("human_eval.jsonl", [1, 2], 4, 3.0, str(path))
     # results = check_output(
     #     [
     #         "python",
