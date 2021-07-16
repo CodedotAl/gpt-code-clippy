@@ -116,7 +116,7 @@ class CodeClippy(datasets.GeneratorBasedBuilder):
         #         continue
         #     lang_exts.extend(i["extensions"])
         # self.lang_exts = set(lang_exts)
-        self.lang_exts = [
+        self.lang_exts = {
             ".lisp",
             ".lsp",
             ".f",
@@ -131,6 +131,8 @@ class CodeClippy(datasets.GeneratorBasedBuilder):
             ".py",
             ".c",
             ".cpp",
+            ".h",
+            ".hpp",
             ".jl",
             ".java",
             ".js",
@@ -148,7 +150,7 @@ class CodeClippy(datasets.GeneratorBasedBuilder):
             ".sc",
             ".lua",
             ".rb",
-        ]
+        }
         data_dir = self.config.data_dir
         return [
             datasets.SplitGenerator(
