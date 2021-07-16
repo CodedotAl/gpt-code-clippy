@@ -57,7 +57,6 @@ _URLs = {
 }
 
 
-
 class CodeClippy(datasets.GeneratorBasedBuilder):
     """CodeClippy dataset - opensource code from Github. Scrapped July 7 2021."""
 
@@ -83,21 +82,21 @@ class CodeClippy(datasets.GeneratorBasedBuilder):
 
     def _info(self):
         features = datasets.Features(
-                {
-                    "id": datasets.Value("int64"),
-                    "text": datasets.Value("string"),
-                    "repo_name": datasets.Value("string"),
-                    "stars": datasets.Value("string"),
-                    "repo_language": datasets.Value("string"),
-                    "file_name": datasets.Value("string"),
-                    "mime_type": datasets.Value("string")
-                }
-                )
+            {
+                "id": datasets.Value("int64"),
+                "text": datasets.Value("string"),
+                "repo_name": datasets.Value("string"),
+                "stars": datasets.Value("string"),
+                "repo_language": datasets.Value("string"),
+                "file_name": datasets.Value("string"),
+                "mime_type": datasets.Value("string"),
+            }
+        )
         return datasets.DatasetInfo(
             description=_DESCRIPTION,
             features=features,
-            homepage= _HOMEPAGE,
-            license=_LICENSE
+            homepage=_HOMEPAGE,
+            license=_LICENSE,
         )
 
     def _split_generators(self, dl_manager):
@@ -105,36 +104,87 @@ class CodeClippy(datasets.GeneratorBasedBuilder):
         # dl_manager is a datasets.download.DownloadManager that can be used to download and extract URLs
         # It can accept any type or nested list/dict and will give back the same structure with the url replaced with path to local files.
         # By default the archives will be extracted and a path to a cached folder where they are extracted is returned instead of the archive
-        
-        # data_dir = dl_manager.download_and_extract(_URLs)
-        filepath = dl_manager.download("https://gist.githubusercontent.com/ppisarczyk/43962d06686722d26d176fad46879d41/raw/211547723b4621a622fc56978d74aa416cbd1729/Programming_Languages_Extensions.json")
-        with open(filepath, "r") as f:
-            data = json.load(f)
 
-        lang_exts = []
-        for i in data:
-            if "extensions" not in i:
-                continue
-            lang_exts.extend(i["extensions"])
-        self.lang_exts = set(lang_exts)
+        # data_dir = dl_manager.download_and_extract(_URLs)
+        # filepath = dl_manager.download("https://gist.githubusercontent.com/ppisarczyk/43962d06686722d26d176fad46879d41/raw/211547723b4621a622fc56978d74aa416cbd1729/Programming_Languages_Extensions.json")
+        # with open(filepath, "r") as f:
+        #     data = json.load(f)
+
+        # lang_exts = []
+        # for i in data:
+        #     if "extensions" not in i:
+        #         continue
+        #     lang_exts.extend(i["extensions"])
+        # self.lang_exts = set(lang_exts)
+        self.lang_exts = [
+            ".lisp",
+            ".lsp",
+            ".f",
+            ".fs",
+            ".sh",
+            ".groovy",
+            ".r",
+            ".pl",
+            ".html",
+            ".css",
+            ".sql",
+            ".py",
+            ".c",
+            ".cpp",
+            ".jl",
+            ".java",
+            ".js",
+            ".ts",
+            ".cs",
+            ".go",
+            ".rs",
+            ".swift",
+            ".php",
+            ".dart",
+            ".kt",
+            ".m",
+            ".hs",
+            ".scala",
+            ".sc",
+            ".lua",
+            ".rb",
+        ]
         data_dir = self.config.data_dir
         return [
             datasets.SplitGenerator(
                 name=datasets.Split.TRAIN,
-                gen_kwargs={"filepaths": sorted([str(fp) for fp in Path(f"{data_dir}/train").glob("*.jsonl.zst")])}
+                gen_kwargs={
+                    "filepaths": sorted(
+                        [
+                            str(fp)
+                            for fp in Path(f"{data_dir}/train").glob("*.jsonl.zst")
+                        ]
+                    )
+                },
             ),
             datasets.SplitGenerator(
                 name=datasets.Split.TEST,
-                gen_kwargs={"filepaths": sorted([str(fp) for fp in Path(f"{data_dir}/test").glob("*.jsonl.zst")])}
+                gen_kwargs={
+                    "filepaths": sorted(
+                        [str(fp) for fp in Path(f"{data_dir}/test").glob("*.jsonl.zst")]
+                    )
+                },
             ),
             datasets.SplitGenerator(
                 name=datasets.Split.VALIDATION,
-                gen_kwargs={"filepaths": sorted([str(fp) for fp in Path(f"{data_dir}/validation").glob("*.jsonl.zst")])}
+                gen_kwargs={
+                    "filepaths": sorted(
+                        [
+                            str(fp)
+                            for fp in Path(f"{data_dir}/validation").glob("*.jsonl.zst")
+                        ]
+                    )
+                },
             ),
         ]
 
-    def _generate_examples(self, filepaths:List):
-        """ Yields examples as (key, example) tuples. """
+    def _generate_examples(self, filepaths: List):
+        """Yields examples as (key, example) tuples."""
         id_ = 0
         dctx = zstd.ZstdDecompressor()
         for filepath in filepaths:
