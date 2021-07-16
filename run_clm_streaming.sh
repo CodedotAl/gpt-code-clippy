@@ -1,16 +1,16 @@
 #! /bin/bash
 ./run_clm_streaming_flax_v2.py \
-    --output_dir $HOME/gpt-neo-125M-test \
-    --model_name_or_path="EleutherAI/gpt-neo-125M" \
+    --output_dir $HOME/gpt-neo-13B-test \
+    --model_name_or_path EleutherAI/gpt-neo-1.3B \
     --dataset_name $HOME/gpt-code-clippy/code_clippy.py \
-    --data_dir /home/shared/code-clippy-dataset/merged-data \
+    --data_dir /home/arto/exdata/merged-data \
     --text_column_name="text" \
     --do_train --do_eval \
-    --block_size="2048" \
-    --per_device_train_batch_size="8" \
-    --per_device_eval_batch_size="16" \
+    --block_size="1024" \
+    --per_device_train_batch_size="1" \
+    --per_device_eval_batch_size="2" \
     --preprocessing_num_workers="8" \
-    --learning_rate="6e-4" \
+    --learning_rate="1e-4" \
     --max_steps 500 \
     --warmup_steps 150 \
     --decay_steps 250 \
@@ -26,9 +26,9 @@
     --skip_memory_metrics="False" \
     --save_steps="50" \
     --save_total_limit 2 \
-    --gradient_accumulation_steps 8 \
+    --gradient_accumulation_steps 1 \
     --report_to="wandb" \
-    --run_name="testing-mini" \
+    --run_name="testing" \
     --max_eval_samples 100 \
     --save_optimizer true \
     # --adafactor \
