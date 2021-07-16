@@ -1,8 +1,8 @@
 #! /bin/bash
-./run_clm_streaming_flax_v2.py \
-    --output_dir $HOME/gpt-neo-125M-code-clippy-dedup-2048 \
-    --model_name_or_path="flax-community/gpt-neo-125M-code-clippy" \
-    --dataset_name $HOME/gpt-code-clippy/code_clippy.py \
+./run_clm_streaming_filter_flax_.py \
+    --output_dir $HOME/gpt-neo-125M-code-clippy-dedup-filtered-no-resize-2048bs \
+    --model_name_or_path="EleutherAI/gpt-neo-125M" \
+    --dataset_name $HOME/gpt-code-clippy/code_clippy_filter.py \
     --data_dir /home/shared/code_clippy_dedup_data \
     --text_column_name="text" \
     --do_train --do_eval \
@@ -28,7 +28,7 @@
     --save_total_limit 10 \
     --gradient_accumulation_steps 32 \
     --report_to="wandb" \
-    --run_name="gpt-neo-125M-code-clippy-dedup-2048" \
+    --run_name="gpt-neo-125M-code-clippy-dedup-filtered-no-resize-2048bs" \
     --max_eval_samples 2000 \
     --save_optimizer true \
     # --adafactor \
