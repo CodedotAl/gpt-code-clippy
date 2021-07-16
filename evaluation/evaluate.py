@@ -1,5 +1,5 @@
 import json
-import torch
+# import torch
 import pandas as pd
 
 # import apps.eval.reident
@@ -8,9 +8,10 @@ import pandas as pd
 # from apps_utils.test_one_solution import eval_and_save_problems
 from datasets import load_dataset, load_metric
 from fastcore.script import *
-from human_eval.data import HUMAN_EVAL, write_jsonl, read_problems
+from human_eval.data import write_jsonl, read_problems
 from human_eval.evaluation import evaluate_functional_correctness
 from pathlib import Path
+from tqdm.auto import tqdm
 # from metrics.extrinsic_eval import compute_metrics
 from subprocess import check_output
 from transformers import (
@@ -37,10 +38,11 @@ model = FlaxGPTNeoForCausalLM.from_pretrained(
 
 
 def generate_text(prompt):
-    inputs = tokenizer(prompt, return_tensors="jax")#.to("cuda")
-    output_seq = model.generate(input_ids=inputs.input_ids, max_length=1_024)
-
-    return tokenizer.decode(output_seq["sequences"][0])
+    inputs = tokenizer(prompt, return_tensors="jax")  # .to("cuda")
+    output_seq = model.generate(input_ids=inputs.input_ids, max_length=MAX_TOKENs)
+    output = tokenizer.decode(output_seq["sequences"][0])
+    # print(output)
+    return output
 
 
 def _eval_concode(path):
@@ -122,7 +124,7 @@ def _eval_human_eval(path):
             task_id=task_id,
             completion=generate_text(problems[task_id]["prompt"]),
         )
-        for task_id in problems
+        for task_id in tqdm(list(problems.keys())[:])
         for _ in range(num_samples_per_task)
     ]
     write_jsonl("human_eval.jsonl", samples)
