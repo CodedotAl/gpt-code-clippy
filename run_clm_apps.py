@@ -481,6 +481,16 @@ def main():
             )
         block_size = min(data_args.block_size, tokenizer.model_max_length)
 
+    def prepare_inputs(sample):
+        q_str =  "\nQUESTION:\n" + sample["question"] + "\n" + sample["starter_code"] + "\n" + sample["answer_type"] + "\nANSWER:\n"
+        return {"question":q_str}
+    
+    dataset = dataset.map(
+        prepare_inputs, 
+        num_proc=data_args.preprocessing_num_workers,
+        load_from_cache_file=not data_args.overwrite_cache,
+    )
+    
     def tokenize_function(examples):
         toks = tokenizer(examples["question"],
                          examples["answer"], 
