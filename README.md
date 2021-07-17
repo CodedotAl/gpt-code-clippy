@@ -7,79 +7,87 @@
     Courtesy of the awesome Aimee Trevett!
 <p>
 
+## Introduction
 
-## Open Source GitHub Copilot for auto generating code
+GPT-Code-Clippy (GPT-CC) is an open source version of [GitHub Copilot](https://copilot.github.com/), a language model -- based on [GPT-3](https://arxiv.org/abs/2005.14165), called [GPT-Codex](https://arxiv.org/abs/2107.03374) -- that is fine-tuned on publicly available code from GitHub.
 
-I would like to train an open source version of the new awesome GitHub Copilot AI tool, which is based on GPT3. Similar to the awesome people behind GPT-Neo, having such an open source model would greatly help researchers understand what this type of biases and limitations this kind of code autocompletion model might have such as generating insecure code (i do research in this area and i know my team would love an open sourced version to run experiments on, i.e. try and break it 🤓)
+## Datasets
 
-## Getting the data
+The dataset used to train GPT-CC is obtained from [SEART GitHub Search](https://seart-ghs.si.usi.ch/) using the following criteria:
 
-### Downloading the data
+- >10 GitHub stars
+- >2 commits
+- Must have a licence
+- Exclude forks
+- Size < 70708 bytes
 
-### Further processing the data
+These repositories are then combined with all of the GitHub repositories contain in [The Pile](https://arxiv.org/abs/2101.00027).
 
-## Finetuning the model
+The repositories are then filtered for duplicate files. Filtering is performed by regexing each file in each repository to obtain a list of "variables" (the tokens which only contain alphanumeric characters) and then filtering out any files which contain the same sequence of "variables. The deduplication script is available [here](https://github.com/ncoop57/gpt-code-clippy/tree/camera-ready/data_processing/deduplication).
 
-## Evaluating the model
+The final dataset is available [here](https://the-eye.eu/public/AI/training_data/code_clippy_data/code_clippy_dedup_data/). The dataset without the duplicates filtered out is also available [here](https://the-eye.eu/public/AI/training_data/code_clippy_data/code_clippy_dedup_data/).
 
-## Using the model
+TODO: link to the dataset available on the HuggingFace datasets hub, see: https://github.com/huggingface/datasets/pull/2666
 
-Possible links to publicly available datasets include:
-- https://huggingface.co/datasets/code_search_net
-- https://huggingface.co/datasets?search=code_x
+## Models
 
-Some additional datasets may need creating that are not just method level.
+The GPT-CC models are fine-tuned versions of [GPT-2](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf) and [GPT-Neo](https://github.com/EleutherAI/gpt-neo).
 
-## 5. Training scripts
+The available models are:
 
-I believe the standard CLM language model script would do for this.
+- https://huggingface.co/flax-community/gpt-2-code-clippy
+- https://huggingface.co/flax-community/gpt-code-clippy-1.3B-apps-alldata-2
+- https://huggingface.co/flax-community/gpt-code-clippy-1.3B-apps-alldata
+- https://huggingface.co/flax-community/gpt-code-clippy-1.3B-apps
+- https://huggingface.co/flax-community/gpt-code-clippy-125M-1024-filtered
+- https://huggingface.co/flax-community/gpt-code-clippy-125M-256
+- https://huggingface.co/flax-community/gpt-code-clippy-125M-bs2048-raw
+- https://huggingface.co/flax-community/gpt-neo-1.3B-code-clippy-test-1
+- https://huggingface.co/flax-community/gpt-neo-1.3B-code-clippy
+- https://huggingface.co/flax-community/gpt-neo-125M-code-clippy-test-1
+- https://huggingface.co/flax-community/gpt-neo-125M-code-clippy-test
+- https://huggingface.co/flax-community/gpt-neo-125M-code-clippy
+- https://huggingface.co/flax-community/gpt-neo-2.7B-code-clippy
+- https://huggingface.co/flax-community/gpt-neo-125M-code-clippy-dedup-filtered-no-resize-2048bs
+- https://huggingface.co/flax-community/gpt-neo-125M-code-clippy-dedup-2048
 
-We can make use of https://www.github.com/huggingface/transformers/tree/master/examples%2Fflax%2Flanguage-modeling%2Frun_clm_flax.py
+TODO: which is the recommended model?
 
-for training the scripts you can run:
-`python run_clm_streaming_flax_v2.py `
+## Training
 
+Training is done using the training scripts available [here](https://github.com/ncoop57/gpt-code-clippy/tree/camera-ready/training).
 
-## 6. Usage
+TODO: which is the recommended way to train GPT-CC?
 
+## Evaluation
 
-code for running the code generation is done by using:
-`bash run_cln_straming.sh` 
+The models are also evaluated on the [APPS dataset](https://github.com/hendrycks/apps).
 
-run_cln_straming.sh contains all the hyperparameters and will be used to generate code.
+TODO: evaluation results.
 
-we have also generated the code for the following languages:
-python
-javascript
-c++
-c
-java
+## Demo
 
-We have used GPT-Neo using 13B and 27B parameter settings.
+A [Visual Studio Code](https://code.visualstudio.com/) which uses the [HuggingFace Inference API](https://api-inference.huggingface.co/docs/python/html/index.html) is available.
 
-to run for following files:
+TODO: more information about this when complete.
 
-13B: 
-`bash run_cln_gpt_neo_13b.sh`
+## Further Reading
 
-27B:
-`bash run_cln_gpt_neo_27b.sh`
-
-
-## 7. (Optional) Challenges
-
-The data additional data may be a challenge. From what I can see in copilot, it looks to be training on entire files, not code snippets. There are file level datasets that exist but they are a few years old and i don't think they cover many programming languages. The ones I listed above have multiple languages but are only methods.
-
-However, githubs API is pretty easy to use and so it would be pretty easy to create one from scratch, especially if we get some insights into how the copilot dataset was generated 🤓
-
-## 8. (Optional) Desired project outcome
-
-I'd love to have this open source model setup in a similar Visual Studio Code extension to the GitHub Copilot one. I've actually made a tutorial on doing this using the GPT-Neo model, so we could easily clean it up and release it free of charge forever because from what I've seen on Twitter the GitHub Copilot might eventually be put behind a paywall 😢.
-
-## 9. (Optional) Reads
-
-The following links can be useful to better understand the project and 
-what has previously been done.
+For more information about GPT-CC, GitHub Copilot, etc, see:
 
 - https://github.blog/2021-06-29-introducing-github-copilot-ai-pair-programmer/
-- https://youtu.be/nC3NrhoNeP4  (tutorial on how we could setup the demo of the model once it's done cooking)
+
+TODO: add more further reading.
+
+## Acknowledgements
+
+- https://github.com/arampacha
+- https://github.com/ncoop57
+- https://github.com/bentrevett
+- https://github.com/arunraja-hub
+- https://github.com/reshinthadithyan
+- https://github.com/shpotes
+- https://github.com/neubig
+- https://github.com/Mrinal18
+
+TODO: everyone to add their names here!
