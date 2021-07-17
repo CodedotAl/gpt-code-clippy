@@ -3,6 +3,7 @@
     --output_dir /home/shared/models/gpt-code-clippy-apps-4 \
     --model_name_or_path EleutherAI/gpt-neo-1.3B \
     --dataset_name ./apps.py \
+    --dataset_config_name formatted \
     --do_train --do_eval \
     --block_size="1024" \
     --per_device_train_batch_size="3" \
