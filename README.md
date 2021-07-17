@@ -15,8 +15,8 @@ GPT-Code-Clippy (GPT-CC) is an open source version of [GitHub Copilot](https://c
 
 The dataset used to train GPT-CC is obtained from [SEART GitHub Search](https://seart-ghs.si.usi.ch/) using the following criteria:
 
-- >10 GitHub stars
-- >2 commits
+- &gt;10 GitHub stars
+- &gt;2 commits
 - Must have a licence
 - Exclude forks
 - Size < 70708 bytes
@@ -61,7 +61,7 @@ TODO: which is the recommended way to train GPT-CC?
 
 ## Evaluation
 
-The models are also evaluated on the [APPS dataset](https://github.com/hendrycks/apps).
+The models are also evaluated on the [APPS](https://github.com/hendrycks/apps) and [HumanEval](https://github.com/openai/human-eval) datasets.
 
 TODO: evaluation results.
 
