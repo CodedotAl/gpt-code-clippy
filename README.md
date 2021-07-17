@@ -4,6 +4,7 @@
     <br>
     <img src="https://raw.githubusercontent.com/ncoop57/gpt-code-clippy/camera-ready/code_clippy_logo.jpg" width="256"/>
     <br>
+    Courtesy of the awesome Aimee Trevett!
 <p>
 
 
