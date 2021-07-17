@@ -157,6 +157,39 @@ class APPS(datasets.GeneratorBasedBuilder):
                     id_ += 1
 
 
+def generate_prompt(
+    test_case_path, prompt_path, solutions_path, tokenizer, starter_path=None
+):
+    """
+    Generate a prompt for a given test case.
+    Original version from https://github.com/hendrycks/apps/blob/main/eval/generate_gpt_codes.py#L51.
+    """
+    _input = "\nQUESTION:\n"
+    with open(prompt_path, "r") as f:
+        data = f.readlines()
+        data = "".join(data)
+    _input += data
+    if starter_path != None:
+        with open(starter_path, "r") as f:
+            data = f.readlines()
+            data = "".join(data)
+            data = "\n" + data  # + "\n"
+        _input += data
+    else:
+        # _input += "\n\n"
+        pass
+
+    with open(test_case_path, "r") as f:
+        data = json.load(f)
+    if not data.get("fn_name"):
+        _input += "\nUse Standard Input format"  # \n"
+    else:
+        _input += "\nUse Call-Based format"  # \n"
+
+    _input += "\nANSWER:\n"
+
+    return _input
+
 
 def reindent_code(codestr):
     """

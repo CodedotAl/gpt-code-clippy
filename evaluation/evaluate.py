@@ -4,8 +4,8 @@ import pandas as pd
 
 # import apps.eval.reident
 
-# from apps_utils.generate_gpt_codes import generate_prompt
-# from apps_utils.test_one_solution import eval_and_save_problems
+from apps_utils.generate_gpt_codes import generate_prompt
+from apps_utils.test_one_solution import eval_and_save_problems
 from datasets import load_dataset, load_metric
 from fastcore.script import *
 from human_eval.data import write_jsonl, read_problems
@@ -20,13 +20,9 @@ from transformers import (
 )
 
 bleu = load_metric("sacrebleu")
-# tokenizer = AutoTokenizer.from_pretrained("EleutherAI/gpt-neo-125M")
-# model = AutoModelWithLMHead.from_pretrained(
-#     "/home/nathan/gpt-code-clippy/data/APPS/models/1.5B"
-# )
 
 MAX_TOKENs = 256
-model_name_or_path = "EleutherAI/gpt-neo-1.3B"# "flax-community/gpt-code-clippy-125M-bs2048-raw" # "EleutherAI/gpt-neo-125M"
+model_name_or_path = "EleutherAI/gpt-neo-125M"# "flax-community/gpt-code-clippy-125M-bs2048-raw" # "EleutherAI/gpt-neo-125M"
 branch = "main"
 
 tokenizer = AutoTokenizer.from_pretrained(
@@ -61,7 +57,29 @@ def _eval_concode(path):
 
 
 def _eval_apps(path):
+
     gpt_codes = {}
+    apps_ds = load_dataset("../data_processing/apps.py")["test"]
+    for idx, example in tqdm(enumerate(apps_ds)):
+        answer = generate_text(example["question"])
+        gpt_codes[idx] = answer
+    with open(path.parent / "all_codes.json", "w") as f:
+        json.dump(gpt_codes, f)
+
+    eval_and_save_problems(path, path.parent)
+        # prompt = generate_prompt(
+        #     Args(),
+        #     test_case_path,
+        #     prompt_path,
+        #     solutions_path,
+        #     tokenizer,
+        #     starter_path=starter_path,
+        # )
+
+
+
+
+
     prob_paths = sorted(path.glob("*/"))
     # map prob_paths to strings and save as a json file
     str_paths = [str(p) for p in prob_paths]
