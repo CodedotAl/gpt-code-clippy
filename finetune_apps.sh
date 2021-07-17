@@ -1,12 +1,12 @@
 #! /bin/bash
 ./run_clm_apps.py \
-    --output_dir $HOME/gpt-code-clippy-apps-2 \
+    --output_dir /home/shared/models/gpt-code-clippy-apps-4 \
     --model_name_or_path EleutherAI/gpt-neo-1.3B \
     --dataset_name ./apps.py \
     --do_train --do_eval \
     --block_size="1024" \
-    --per_device_train_batch_size="2" \
-    --per_device_eval_batch_size="2" \
+    --per_device_train_batch_size="3" \
+    --per_device_eval_batch_size="3" \
     --preprocessing_num_workers="16" \
     --learning_rate="2e-5" \
     --warmup_steps="5000" \
@@ -24,8 +24,9 @@
     --save_steps="1000" \
     --save_strategy epoch \
     --save_total_limit 2 \
-    --gradient_accumulation_steps 2 \
-    --adafactor \
+    --gradient_accumulation_steps 1 \
+    --adafactor true \
+    --all_data true \
     # --resume_from_checkpoint $HOME/gpt-neo-125M-code-clippy/ckpt_201 \
     # --max_train_samples="10000" \
     # --max_eval_samples="1000"
