@@ -63,6 +63,16 @@ TODO: which is the recommended way to train GPT-CC?
 
 The models are also evaluated on the [APPS](https://github.com/hendrycks/apps) and [HumanEval](https://github.com/openai/human-eval) datasets.
 
+### Human Eval Results
+
+| Model                             |   pass@1    |   pass@2    |   pass@5    |   pass@10   |
+| --------------------------------- | :---------: | :---------: | :---------: | :---------: |
+| EleutherAI/gpt-neo                |    0.12%    |    0.24%    |    0.61%    |    1.22%    |
+| dedup-filtered-no-resize-2048bs   |    0.00%    |    0.00%    |    0.00%    |    0.00%    |
+| 1024-filtered                     |    0.00%    |    0.00%    |    0.00%    |    0.00%    |
+| dedup-2048                        |    0.00%    |    0.00%    |    0.00%    |    0.00%    |
+
+
 TODO: evaluation results.
 
 ## Demo
