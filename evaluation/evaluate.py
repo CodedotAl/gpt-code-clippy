@@ -4,8 +4,8 @@ import pandas as pd
 
 # import apps.eval.reident
 
-from apps_utils.generate_gpt_codes import generate_prompt
-from apps_utils.test_one_solution import eval_and_save_problems
+# from apps_utils.generate_gpt_codes import generate_prompt
+# from apps_utils.test_one_solution import eval_and_save_problems
 from datasets import load_dataset, load_metric
 from fastcore.script import *
 from human_eval.data import write_jsonl, read_problems
@@ -21,8 +21,8 @@ from transformers import (
 
 bleu = load_metric("sacrebleu")
 
-MAX_TOKENs = 256
-model_name_or_path = "EleutherAI/gpt-neo-125M"# "flax-community/gpt-code-clippy-125M-bs2048-raw" # "EleutherAI/gpt-neo-125M"
+MAX_TOKENs = 1024
+model_name_or_path = "flax-community/gpt-code-clippy-125M-1024-f" # "flax-community/gpt-code-clippy-125M-bs2048-raw" # "EleutherAI/gpt-neo-125M"
 branch = "main"
 
 tokenizer = AutoTokenizer.from_pretrained(
@@ -136,20 +136,19 @@ def _eval_apps(path):
 
 
 def _eval_human_eval(path):
-
-    problems = read_problems(str(path))
-    num_samples_per_task = 1
-    samples = [
-        dict(
-            task_id=task_id,
-            completion=generate_text(problems[task_id]["prompt"]),
-        )
-        for task_id in tqdm(list(problems.keys())[:])
-        for _ in range(num_samples_per_task)
-    ]
-    write_jsonl("human_eval.jsonl", samples)
+    # problems = read_problems(str(path))
+    # num_samples_per_task = 1
+    # samples = [
+    #     dict(
+    #         task_id=task_id,
+    #         completion=generate_text(problems[task_id]["prompt"]),
+    #     )
+    #     for task_id in tqdm(list(problems.keys()))
+    #     for _ in range(num_samples_per_task)
+    # ]
+    # write_jsonl("human_eval.jsonl", samples)
     # execute bash command to run eval script
-    results = evaluate_functional_correctness("human_eval.jsonl", [1, 2], 4, 3.0, str(path))
+    results = evaluate_functional_correctness("human_eval.jsonl", [1], 4, 3.0, str(path))
     # results = check_output(
     #     [
     #         "python",

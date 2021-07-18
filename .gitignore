@@ -1,5 +1,4 @@
 core
-human_eval.*
 human-eval
 hf_cache
 data
