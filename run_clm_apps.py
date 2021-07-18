@@ -635,7 +635,7 @@ def main():
         shift_logits = logits[..., :-1, :]
         shift_labels = labels[..., 1:]
         loss = optax.softmax_cross_entropy(shift_logits, onehot(shift_labels, shift_logits.shape[-1])) * labels_mask[..., 1:]
-        return loss.mean()
+        return (loss.sum(axis=-1) / labels_mask.sum(axis=-1)).mean()
 
     # Define gradient update step fn
     def train_step(state, batch):
