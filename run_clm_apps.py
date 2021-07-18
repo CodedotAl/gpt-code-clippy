@@ -665,7 +665,7 @@ def main():
     def eval_step(params, batch):
         labels = batch.pop("labels")
         token_type_ids = batch.pop("token_type_ids")
-        labels_mask = batch["attention_mask"] - token_type_ids
+        labels_mask = batch["attention_mask"] * token_type_ids
         del token_type_ids
         logits = model(**batch, params=params, train=False)[0]
         loss = loss_fn(logits, labels, labels_mask)
