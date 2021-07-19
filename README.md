@@ -68,6 +68,7 @@ The models are also evaluated on the [APPS](https://github.com/hendrycks/apps) a
 | Model                             |   pass@1    |   pass@2    |   pass@5    |   pass@10   |
 | --------------------------------- | :---------: | :---------: | :---------: | :---------: |
 | EleutherAI/gpt-neo                |    0.12%    |    0.24%    |    0.61%    |    1.22%    |
+| EleutherAI/gpt-neo                |    0.06%    |    0.12%    |    0.30%    |    0.61%    |
 | dedup-filtered-no-resize-2048bs   |    0.00%    |    0.00%    |    0.00%    |    0.00%    |
 | 1024-filtered                     |    0.00%    |    0.00%    |    0.00%    |    0.00%    |
 | dedup-2048                        |    0.00%    |    0.00%    |    0.00%    |    0.00%    |

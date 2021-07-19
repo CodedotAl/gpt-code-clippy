@@ -69,23 +69,37 @@ class APPS(datasets.GeneratorBasedBuilder):
     # You will be able to load one or the other configurations in the following list with
     # data = datasets.load_dataset('my_dataset', 'first_domain')
     # data = datasets.load_dataset('my_dataset', 'second_domain')
-    # BUILDER_CONFIGS = [
-    #     datasets.BuilderConfig(name="first_domain", version=VERSION, description="This part of my dataset covers a first domain"),
-    #     datasets.BuilderConfig(name="second_domain", version=VERSION, description="This part of my dataset covers a second domain"),
-    # ]
+    BUILDER_CONFIGS = [
+        datasets.BuilderConfig(name="raw", version=VERSION, description="Outputs separate entry for question, starter code et."),
+        datasets.BuilderConfig(name="formatted", version=VERSION, description="Outputs a formatted qestions for APPS task."),
+    ]
 
-    # DEFAULT_CONFIG_NAME = "first_domain"
+    DEFAULT_CONFIG_NAME = "formatted"
 
     def _info(self):
-        features = datasets.Features(
+        if self.config.name == "raw":
+            features = datasets.Features(
                 {
                     "id": datasets.Value("int64"),
                     "question": datasets.Value("string"),
                     "answer": datasets.Value("string"),
                     "starter_code": datasets.Value("string"),
                     "answer_type": datasets.Value("string"),
+                    "input_output": datasets.Value("string"),
                 }
-                )
+            )
+        elif self.config.name == "formatted":
+            features = datasets.Features(
+                {
+                    "id": datasets.Value("int64"),
+                    "question": datasets.Value("string"),
+                    "answer": datasets.Value("string"),
+                    "input_output": datasets.Value("string"),
+                }
+            )
+        else:
+            raise ValueError(f"{self.config.name} is not a proper config for APPS dataset. Available configs are: 'raw', 'formatted'.")
+        
         return datasets.DatasetInfo(
             description=_DESCRIPTION,
             features=features,
@@ -119,8 +133,8 @@ class APPS(datasets.GeneratorBasedBuilder):
             question_fname = os.path.join(problem, "question.txt")
             sols_fname = os.path.join(problem, "solutions.json")
             starter_code = os.path.join(problem, "starter_code.py")
+            input_output = os.path.join(problem, "input_output.json")
 
-            # print(question_fname)
 
             if os.path.exists(starter_code):
                 answer_type = "\nUse Call-Based format\n"
@@ -141,20 +155,34 @@ class APPS(datasets.GeneratorBasedBuilder):
             with open(question_fname, 'r') as f:
                 question_str = f.read()
 
+            if self.config.name == "raw":
+                prompt_dict = {
+                    "question":question_str, 
+                    "starter_code":starter_code, 
+                    "answer_type":answer_type,
+                }
+            else:
+                question_str = (
+                    "\nQUESTION:\n" + 
+                    question_str + "\n" + 
+                    starter_code + "\n" + 
+                    answer_type + 
+                    "\nANSWER:\n"
+                )
+                prompt_dict = {"question":question_str}
             # Read all the solutions
             with open(sols_fname, 'r') as f:
                 sols_str_list = json.load(f)
                 for sol_str in sols_str_list:
                     sol_str = reindent_code(sol_str)
-
                     yield id_, {
                         "id":id_, 
-                        "question":question_str, 
-                        "starter_code":starter_code, 
-                        "answer_type":answer_type,
-                        "answer":sol_str
+                        "answer":sol_str,
+                        "input_output": input_output,
+                        **prompt_dict
                     }
                     id_ += 1
+
 
 
 def generate_prompt(
