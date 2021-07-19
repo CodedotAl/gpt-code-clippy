@@ -3,6 +3,9 @@ import gradio as gr
 from rich.console import Console
 from rich.syntax import Syntax
 from transformers import AutoModelForCausalLM, AutoTokenizer
+import requests
+import json
+import webbrowser
 
 # model_name = "flax-community/gpt-code-clippy-1.3B-apps-alldata"
 model_name = "flax-community/gpt-code-clippy-125M-apps-alldata"
@@ -15,9 +18,19 @@ console = Console(record=True)
 
 def format_input(question, starter_code=""):
     answer_type = (
-        "\nUse Call-Based format\n" if starter_code else "\nUse Standard Input format\n"
+        "\
+Use Call-Based format\
+" if starter_code else "\
+Use Standard Input format\
+"
     )
-    return f"\nQUESTION:\n{question}\n{starter_code}\n{answer_type}\nANSWER:\n"
+    return f"\
+QUESTION:\
+{question}\
+{starter_code}\
+{answer_type}\
+ANSWER:\
+"
 
 
 def format_outputs(text):
@@ -94,9 +107,34 @@ inputs = [
     gr.inputs.Textbox(placeholder="Provide optional starter code...", lines=3),
     gr.inputs.Slider(0.5, 1.5, 0.1, default=0.8, label="Temperature"),
     gr.inputs.Slider(1, 4, 1, default=1, label="Beam size"),
+    gr.inputs.Textbox(lines=1, label="Your GitHub API token")
 ]
 
 outputs = [gr.outputs.HTML(label="Solution")]
+print(outputs)
+
+# adding carbon support
+
+GITHUB_API="https://api.github.com"
+API_TOKEN=gr.inputs.Textbox(label="Your GitHub API token")
+#form a request URL
+url=GITHUB_API+"/gists"
+
+#print headers,parameters,payload
+headers={'Authorization':'token %s'%API_TOKEN}
+params={'scope':'gist'}
+payload={outputs}
+
+
+
+res=requests.post(url,headers=headers,params=params,data=json.dumps(payload))
+
+
+col = st.beta_columns([2, 4])
+if col.button("Create a 'carbon' copy"):
+    carbon_url='https://carbon.now.sh/'+res.text.split(',')[0].split('/')[-1][:-1]
+    webbrowser.open_new(carbon_url)
+
 
 gr.Interface(
     generate_solution,
