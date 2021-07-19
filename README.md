@@ -27,27 +27,20 @@ The repositories are then filtered for duplicate files. Filtering is performed b
 
 The final dataset is available [here](https://the-eye.eu/public/AI/training_data/code_clippy_data/code_clippy_dedup_data/). The dataset without the duplicates filtered out is also available [here](https://the-eye.eu/public/AI/training_data/code_clippy_data/code_clippy_dedup_data/).
 
-TODO: link to the dataset available on the HuggingFace datasets hub, see: https://github.com/huggingface/datasets/pull/2666
+The datasheet discussing in more detail the construction, usage, and limitation of the dataset can be found [here](https://github.com/ncoop57/datasets/tree/code-clippy/datasets/code_clippy). We hope to get it officially into Huggingface's datasets library [soon](https://github.com/huggingface/datasets/pull/2666)!
 
 ## Models
 
 The GPT-CC models are fine-tuned versions of [GPT-2](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf) and [GPT-Neo](https://github.com/EleutherAI/gpt-neo).
 
-The available models are:
+The available models can be found [here](https://huggingface.co/models?search=code-clippy)
 
-- https://huggingface.co/flax-community/gpt-2-code-clippy
+The ones that perform relatively well (None improve on the standard GPT-Neo 125M model except for APPs specific models and only for the APPs task):
+- https://huggingface.co/flax-community/gpt-code-clippy-125M-apps-alldata
 - https://huggingface.co/flax-community/gpt-code-clippy-1.3B-apps-alldata-2
 - https://huggingface.co/flax-community/gpt-code-clippy-1.3B-apps-alldata
 - https://huggingface.co/flax-community/gpt-code-clippy-1.3B-apps
-- https://huggingface.co/flax-community/gpt-code-clippy-125M-1024-filtered
-- https://huggingface.co/flax-community/gpt-code-clippy-125M-256
-- https://huggingface.co/flax-community/gpt-code-clippy-125M-bs2048-raw
-- https://huggingface.co/flax-community/gpt-neo-1.3B-code-clippy-test-1
-- https://huggingface.co/flax-community/gpt-neo-1.3B-code-clippy
-- https://huggingface.co/flax-community/gpt-neo-125M-code-clippy-test-1
-- https://huggingface.co/flax-community/gpt-neo-125M-code-clippy-test
 - https://huggingface.co/flax-community/gpt-neo-125M-code-clippy
-- https://huggingface.co/flax-community/gpt-neo-2.7B-code-clippy
 - https://huggingface.co/flax-community/gpt-neo-125M-code-clippy-dedup-filtered-no-resize-2048bs
 - https://huggingface.co/flax-community/gpt-neo-125M-code-clippy-dedup-2048
 
@@ -68,17 +61,20 @@ The models are also evaluated on the [APPS](https://github.com/hendrycks/apps) a
 | Model                             |   pass@1    |   pass@2    |   pass@5    |   pass@10   |
 | --------------------------------- | :---------: | :---------: | :---------: | :---------: |
 | EleutherAI/gpt-neo                |    0.12%    |    0.24%    |    0.61%    |    1.22%    |
-| EleutherAI/gpt-neo                |    0.06%    |    0.12%    |    0.30%    |    0.61%    |
+| gpt-neo-125M-apps                 |    0.06%    |    0.12%    |    0.30%    |    0.61%    |
 | dedup-filtered-no-resize-2048bs   |    0.00%    |    0.00%    |    0.00%    |    0.00%    |
 | 1024-filtered                     |    0.00%    |    0.00%    |    0.00%    |    0.00%    |
 | dedup-2048                        |    0.00%    |    0.00%    |    0.00%    |    0.00%    |
 
+### APPS Eval Results
 
-TODO: evaluation results.
+Coming soon...
 
 ## Demo
 
-A [Visual Studio Code](https://code.visualstudio.com/) which uses the [HuggingFace Inference API](https://api-inference.huggingface.co/docs/python/html/index.html) is available.
+A [Visual Studio Code](https://code.visualstudio.com/) which uses the [HuggingFace Inference API](https://api-inference.huggingface.co/docs/python/html/index.html) is available and can be found [here](https://github.com/ncoop57/code-clippy-vscode).
+
+We also have [Huggingface's Space demo](https://huggingface.co/spaces/flax-community/code-clippy-problem-solver) where you can specify and problem in the format of a programming competition question.
 
 TODO: more information about this when complete.
 
@@ -92,6 +88,7 @@ TODO: add more further reading.
 
 ## Acknowledgements
 
+Special thanks to our contributors!!
 - https://github.com/arampacha
 - https://github.com/ncoop57
 - https://github.com/bentrevett
@@ -100,5 +97,4 @@ TODO: add more further reading.
 - https://github.com/shpotes
 - https://github.com/neubig
 - https://github.com/Mrinal18
-
-TODO: everyone to add their names here!
+- and everyone else that helped out the project!
