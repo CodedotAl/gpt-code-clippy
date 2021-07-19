@@ -135,8 +135,8 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
     elif problem_list is not None:
         root = problem_list[prob_index]
 
-    if os.path.exists(os.path.join(root, "input_output.json")):
-        with open(os.path.join(root, "input_output.json")) as f:
+    if os.path.exists(root):
+        with open(root) as f:
             in_outs = json.load(f)
             if debug:
                 print(f"test cases json = {in_outs['inputs']} {in_outs['outputs']}")

@@ -5,7 +5,7 @@ import pandas as pd
 # import apps.eval.reident
 
 # from apps_utils.generate_gpt_codes import generate_prompt
-# from apps_utils.test_one_solution import eval_and_save_problems
+from apps_utils.test_one_solution import eval_and_save_problems
 from datasets import load_dataset, load_metric
 from fastcore.script import *
 from human_eval.data import write_jsonl, read_problems
@@ -23,7 +23,7 @@ from transformers import (
 # bleu = load_metric("sacrebleu")
 
 MAX_TOKS = 1024
-MAX_NEW_TOKS = 64
+MAX_NEW_TOKS = 128
 
 
 def generate_text_jax(prompt):
@@ -36,7 +36,7 @@ def generate_text_jax(prompt):
     return output
 
 def generate_text(prompt, n, tokenizer, model):
-    inputs = tokenizer(prompt, return_tensors="pt").to("cuda")
+    inputs = tokenizer(prompt, truncation=True, max_length=MAX_TOKS, return_tensors="pt").to("cuda")
     output_seq = model.generate(
         input_ids=inputs.input_ids, max_length=MAX_TOKS,
         max_new_tokens=MAX_NEW_TOKS, 
@@ -58,17 +58,17 @@ def _eval_concode(path):
     print(f"Bleu score for Concode dataset: {results}")
 
 
-def _eval_apps(path):
-
+def _eval_apps(out_path, tokenizer, model):
     gpt_codes = {}
     apps_ds = load_dataset("../data_processing/apps.py")["test"]
-    for idx, example in tqdm(enumerate(apps_ds)):
-        answer = generate_text(example["question"])
+    apps_ds = apps_ds.select(range(5_212))
+    for idx, example in tqdm(enumerate(apps_ds), total=len(apps_ds)):
+        answer = generate_text(example["question"], 5, tokenizer, model)
         gpt_codes[idx] = answer
-    with open(path.parent / "all_codes.json", "w") as f:
+    with open(out_path / "all_codes.json", "w") as f:
         json.dump(gpt_codes, f)
 
-    eval_and_save_problems(path, path.parent)
+    eval_and_save_problems(apps_ds, out_path)
 
 
 def _eval_human_eval(path, out_path, tokenizer, model):
@@ -117,5 +117,5 @@ def main(
 
 
     # _eval_concode(concode_path)
-    _eval_human_eval(human_eval_path, out_path, tokenizer, model)
-    # _eval_apps(apps_path)
+    # _eval_human_eval(human_eval_path, out_path, tokenizer, model)
+    _eval_apps(out_path, tokenizer, model)

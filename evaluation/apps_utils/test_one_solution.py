@@ -43,7 +43,8 @@ from tqdm import tqdm
 from typing import List
 
 
-def print_results(results, args):
+def print_results(results):
+    print(results)
     res = []
     per_prob_res = []
     all_correct = []
@@ -51,34 +52,36 @@ def print_results(results, args):
         res.extend(results[index])
         per_prob_res.append(np.mean(results[index]))
         all_correct.append(np.all(results[index]))
+    # res = np.array(res)
     tmp_results = res
+    # print(res)
     compile_errors = len(tmp_results[tmp_results == -2])
     runtime_errors = len(tmp_results[tmp_results == -1])
     failures = len(tmp_results[tmp_results == False])
     successes = len(tmp_results[tmp_results == True])
     total_testcases = len(res)
-    if args.debug:
-        print(
-            f"number of compile errors = {compile_errors} avg = {compile_errors / total_testcases }"
-        )
-        print(
-            f"number of runtime errors = {runtime_errors} avg = {runtime_errors / total_testcases}"
-        )
-        print(f"number of test cases run = {total_testcases}")
+    # if args.debug:
+    print(
+        f"number of compile errors = {compile_errors} avg = {compile_errors / total_testcases }"
+    )
+    print(
+        f"number of runtime errors = {runtime_errors} avg = {runtime_errors / total_testcases}"
+    )
+    print(f"number of test cases run = {total_testcases}")
 
     print(
         f"Test Case Average (average accuracy over problems) = {np.mean(per_prob_res)}"
     )
     print(
-        f"Strict Accuracy (all test cases passed / total problems) = {np.mean(all_correct)}"
+        f"Strict Accuracy (all test cases passed / total problems) = {successes / total_testcases}"
     )
 
 
-def eval_and_save_problems(test_loc, save):
-    test_path = Path(test_loc)
-    problems = list(test_path.glob("*/"))
+def eval_and_save_problems(ds, save):
+    # test_path = Path(test_loc)
+    # problems = list(test_path.glob("*/"))
 
-    print(len(problems))
+    # print(len(problems))
     gpt_codes = {}
     gpt_bleu = {}
     gpt_codebleu = {}
@@ -95,15 +98,16 @@ def eval_and_save_problems(test_loc, save):
         gpt_codes = json.load(f)
 
     # main eval loop
-    for index, problem in enumerate(tqdm(problems[:2])):
+    for index, row in enumerate(tqdm(ds)):
         try:
             # if args.debug:
             #     print(f"\n\nproblem path = {problem}")
             output_str = gpt_codes[str(index)]
+            # print("String output: ", output_str)
         except:
-            print("CANNOT FIND OUTPUT_STR FOR", problem)
+            print("CANNOT FIND OUTPUT_STR FOR", io_path)
             continue
-        prob_path = problem  # os.path.join(args.root, problem)
+        io_path = row["input_output"]  # os.path.join(args.root, problem)
 
         # with open(os.path.join(prob_path, "solutions.json"), "r") as f:
         #     sols = json.load(f)
@@ -112,39 +116,38 @@ def eval_and_save_problems(test_loc, save):
             os.makedirs(save)
 
         res = []
-        # for o_idx, o in enumerate(output_str):
-        #     print(o)
-        # if args.debug:
-        #     print(f"\nTesting solution {o_idx}")
-        curr_res = [-2]
-        try:
-            curr_res = test_util.run_test(
-                prob_path=prob_path, test=output_str, debug=False  # args.debug
-            )
-            fixed = []
-            for e in curr_res:
-                if isinstance(e, np.ndarray):
-                    e = e.item(0)
-                if isinstance(e, np.bool_):
-                    e = bool(e)
-                fixed.append(e)
-            curr_res = fixed
-            if not np.all(curr_res):
-                print(f"Results were not all True: {curr_res}")
-        except Exception as e:
-            print(f"test framework exception = {repr(e)}{e}\n")
-            break
-        finally:
-            assert isinstance(curr_res, list)
-            res.append(curr_res)
+        for o_idx, o in enumerate(output_str):
+            # print(o)
+            # if args.debug:
+            #     print(f"\nTesting solution {o_idx}")
+            curr_res = [-2]
+            try:
+                curr_res = test_util.run_test(
+                    prob_path=io_path, test=o, debug=False  # args.debug
+                )
+                fixed = []
+                for e in curr_res:
+                    if isinstance(e, np.ndarray):
+                        e = e.item(0)
+                    if isinstance(e, np.bool_):
+                        e = bool(e)
+                    fixed.append(e)
+                curr_res = fixed
+                if not np.all(curr_res):
+                    print(f"Results were not all True: {curr_res}")
+            except Exception as e:
+                print(f"test framework exception = {repr(e)}{e}\n")
+                break
+            finally:
+                assert isinstance(curr_res, list)
+                res.append(curr_res)
 
         # if args.debug:
-        #     print(
-        #         f"\nHow to read results [-2] = compile error, [-1] = runtime error [False] = failed test case [True] = passed test case"
-        #     )
+        
         # print(f"results = {res}")
-
-        results[index] = res
+        # print(len(output_str))
+        flattened = [val for sublist in res for val in sublist]
+        results[index] = flattened
 
         with open(results_loc, "w") as f:
             try:
@@ -155,4 +158,7 @@ def eval_and_save_problems(test_loc, save):
                 pdb.set_trace()
                 print("didn't save problem due to {e}")
 
-    return results
+    print(
+        f"\nHow to read results [-2] = compile error, [-1] = runtime error [False] = failed test case [True] = passed test case"
+    )
+    print_results(results)
