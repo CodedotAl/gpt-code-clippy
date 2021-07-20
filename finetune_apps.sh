@@ -1,6 +1,6 @@
 #! /bin/bash
 ./run_clm_apps.py \
-    --output_dir /home/shared/models/gpt-code-clippy-1.3B-apps \
+    --output_dir /home/shared/models/gpt-code-clippy-1.3B-apps-3 \
     --model_name_or_path EleutherAI/gpt-neo-1.3B \
     --dataset_name ./apps.py \
     --dataset_config_name formatted \
@@ -24,11 +24,13 @@
     --skip_memory_metrics="False" \
     --save_steps="1000" \
     --save_strategy epoch \
-    --save_total_limit 2 \
+    --save_total_limit="None" \
     --gradient_accumulation_steps 1 \
     --adafactor true \
-    --all_data true \
+    --all_data false \
     --seed 842 \
+    --save_optimizer false \
+    --max_eval_samples 20000
     # --resume_from_checkpoint $HOME/gpt-neo-125M-code-clippy/ckpt_201 \
     # --max_train_samples="10000" \
-    # --max_eval_samples="1000"
+    
