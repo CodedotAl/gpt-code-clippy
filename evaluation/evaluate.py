@@ -25,15 +25,14 @@ from transformers import (
 MAX_TOKS = 1024
 MAX_NEW_TOKS = 128
 
+def clean_text(generation):
+    # clean up text has discussed in OpenAI's paper "Evaluating Large Language Models Trained on Code"
+    generation = generation.split("\ndef")[0]
+    generation = generation.split("\nclass")[0]
+    generation = generation.split("\n#")[0]
+    generation = generation.split("\nif")[0]
 
-def generate_text_jax(prompt):
-    inputs = tokenizer(prompt, return_tensors="jax")
-    output_seq = model.generate(
-        input_ids=inputs.input_ids, do_sample=True, max_length=MAX_TOKS, temperature=0.8
-    )
-    output = tokenizer.decode(output_seq["sequences"][0])
-    # print(output)
-    return output
+    return generation
 
 def generate_text(prompt, n, tokenizer, model):
     inputs = tokenizer(prompt, truncation=True, max_length=MAX_TOKS, return_tensors="pt").to("cuda")
@@ -43,7 +42,14 @@ def generate_text(prompt, n, tokenizer, model):
         do_sample=True, temperature=0.8,
         num_return_sequences=n
     )
-    return tokenizer.batch_decode(output_seq, skip_special_tokens=False)
+
+    outputs = tokenizer.batch_decode(output_seq, skip_special_tokens=False)
+    generated_text = []
+    for o in outputs:
+        cleaned = clean_text(o.replace(prompt, ""))
+        generated_text.append(prompt + cleaned)
+
+    return generated_text
 
 def _eval_concode(path):
     # TODO: format input to model same as App and OpenAI HumanEval datasets are formatted
@@ -73,7 +79,7 @@ def _eval_apps(out_path, tokenizer, model):
 
 def _eval_human_eval(path, out_path, tokenizer, model):
     problems = read_problems(str(path))
-    num_samples_per_task = 10
+    num_samples_per_task = 5
     samples = []
     for task_id in tqdm(list(problems.keys())):
         for text in generate_text(
@@ -87,7 +93,7 @@ def _eval_human_eval(path, out_path, tokenizer, model):
     write_jsonl(str(out_path / "human_eval.jsonl"), samples)
 
     # test out generated functions
-    results = evaluate_functional_correctness(str(out_path / "human_eval.jsonl"), [1, 2, 5, 10], 4, 3.0, str(path))
+    results = evaluate_functional_correctness(str(out_path / "human_eval.jsonl"), [1, 2, 5], 4, 3.0, str(path))
     print(results)
 
 
@@ -117,5 +123,5 @@ def main(
 
 
     # _eval_concode(concode_path)
-    # _eval_human_eval(human_eval_path, out_path, tokenizer, model)
-    _eval_apps(out_path, tokenizer, model)
+    _eval_human_eval(human_eval_path, out_path, tokenizer, model)
+    # _eval_apps(out_path, tokenizer, model)
