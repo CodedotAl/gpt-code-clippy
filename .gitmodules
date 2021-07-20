@@ -1,3 +1,12 @@
 [submodule "dependency_repos/github-downloader"]
 	path = dependency_repos/github-downloader
 	url = https://github.com/EleutherAI/github-downloader
+[submodule "dependency_repos/apps"]
+	path = dependency_repos/apps
+	url = https://github.com/hendrycks/apps.git
+[submodule "dependency_repos/human-eval"]
+	path = dependency_repos/human-eval
+	url = https://github.com/openai/human-eval
+[submodule "dependency_repos/CodeXGLUE"]
+	path = dependency_repos/CodeXGLUE
+	url = https://github.com/microsoft/CodeXGLUE
