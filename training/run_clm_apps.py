@@ -481,6 +481,11 @@ def main():
             )
         block_size = min(data_args.block_size, tokenizer.model_max_length)
 
+    dataset.map(
+        lambda s: {"answer":s["answer"]+tokenizer.eos_token}, 
+        num_proc=data_args.preprocessing_num_workers
+    )
+
     def tokenize_function(examples):
         toks = tokenizer(examples["question"],
                          examples["answer"], 
