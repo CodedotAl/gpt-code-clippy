@@ -50,6 +50,13 @@ TODO: which is the recommended model?
 
 Training is done using the training scripts available [here](https://github.com/ncoop57/gpt-code-clippy/tree/camera-ready/training).
 
+For fine-tuning GPTNeo-125M on CodeClippy dataset we used AdamW optimizer (beta1=0.9, beta2=0.95) with GPT3-like learning rate schedule (4k warmup steps from 0 to 5e-5 followed by 50k cosine decay steps to 5e-6), weight decay 0.1 and batch size 1024, sequence length 2048. The choice of relatively large batch size and low LR with long warmup are made to avoid agressive updates and preserve the knowledge contained in pretrained GPTNeo weights.
+
+For fine-tuning GPTNe0-125M on APPS dataset we used AdamW optimizer (beta1=0.9, beta2=0.98) with linear learning rate schedule (800 warmup steps from 0 to peak LR followed by linear decay to 0, a range of value for peak LR was [1e-5; 1e-4]), weight decay 0.1 and batch size 256, sequence length 1024. We trained model for 5 epochs selecting best checkpoint judging by validation loss. The language modelling objective for APPS dataset is modified to backpropagate loss only for the tokens corresponding to code solution (refer to [Hendrycks et al](https://arxiv.org/pdf/2105.09938.pdf) for more details).
+
+For fine-tuning GPTNe0-1.3B on APPS dataset we used [Adafactor optimizer](https://github.com/deepmind/optax/blob/243ed1991b2793e87ab60387f7c3d49d6ab57710/optax/_src/alias.py#L74) with linear learning rate schedule (5k warmup steps from 0 to 2e-5 followed by linear decay to 0), weight decay 0.1 and batch size 24, sequence length 1024. The choice of hyperparameters for 1.3B model is in part determined by hardware limitations. We trained model for 5 epochs selecting best checkpoint judging by validation loss.
+
+
 TODO: which is the recommended way to train GPT-CC?
 
 ## Evaluation
