@@ -21,10 +21,7 @@ https://huggingface.co/models?filter=causal-lm
 """
 # You can also adapt this script on your own causal language modeling task. Pointers for this are left as comments.
 
-<<<<<<< HEAD
-=======
 from ast import Str
->>>>>>> license
 import logging
 import math
 import os
@@ -35,17 +32,10 @@ from pathlib import Path
 from typing import Callable, Optional
 import json
 import shutil
-<<<<<<< HEAD
-
-import datasets
-from datasets import Dataset, load_dataset, concatenate_datasets
-from datasets.dataset_dict import DatasetDict
-=======
 from flax import training
 import numpy as np
 import datasets
 from datasets import load_dataset
->>>>>>> license
 from tqdm import tqdm
 
 import jax
@@ -53,20 +43,12 @@ import jax.profiler
 import jax.numpy as jnp
 import optax
 import transformers
-<<<<<<< HEAD
-from flax import jax_utils, traverse_util
-from flax.jax_utils import unreplicate
-from flax.training import train_state
-from flax.training.checkpoints import save_checkpoint, restore_checkpoint
-from flax.training.common_utils import get_metrics, onehot, shard, shard_prng_key
-=======
 import flax
 from flax import jax_utils, traverse_util
 from flax.jax_utils import unreplicate
 from flax.training import train_state
 from flax.training.common_utils import get_metrics, onehot, shard, shard_prng_key
 from flax.training.checkpoints import save_checkpoint, restore_checkpoint
->>>>>>> license
 from flax.serialization import to_bytes, from_bytes
 from transformers import (
     CONFIG_MAPPING,
@@ -77,18 +59,11 @@ from transformers import (
     HfArgumentParser,
     TrainingArguments,
     is_tensorboard_available,
-<<<<<<< HEAD
-    IntervalStrategy
-)
-
-from importlib.util import find_spec
-=======
 )
 from transformers.testing_utils import CaptureLogger
 
 from importlib.util import find_spec
 from utils import PrefetchDataloader, make_batch
->>>>>>> license
 
 logger = logging.getLogger(__name__)
 
@@ -101,10 +76,7 @@ class ModelArguments:
     """
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune, or train from scratch.
     """
-<<<<<<< HEAD
-=======
 
->>>>>>> license
     model_name_or_path: Optional[str] = field(
         default=None,
         metadata={
@@ -139,9 +111,6 @@ class ModelArguments:
         default=True,
         metadata={"help": "Whether to store full train state including optimizer."},
     )
-<<<<<<< HEAD
-
-=======
     repo_path_or_name: Optional[str] = field(
         default=None,
         metadata={"help": "Path to the modelhub repo directory"},
@@ -151,7 +120,6 @@ class ModelArguments:
         metadata={"help": "URL of the modelhub repo"},
     )
     decay_steps: int = field(default=None, metadata={"help":"Number of steps from peak to final learning rate"})
->>>>>>> license
 
 @dataclass
 class DataTrainingArguments:
@@ -170,10 +138,7 @@ class DataTrainingArguments:
         default=None,
         metadata={"help": "An optional input evaluation data file to evaluate the perplexity on (a text file)."},
     )
-<<<<<<< HEAD
-=======
     data_dir: Optional[str] = field(default=None, metadata={"help": "Path to data directory."})
->>>>>>> license
     max_train_samples: Optional[int] = field(
         default=None,
         metadata={
@@ -216,15 +181,12 @@ class DataTrainingArguments:
             default='text',
             metadata={"help": "Column containing main text data."},
         )
-<<<<<<< HEAD
-=======
     shuffle_buffer_size: int = field(
         default=10000, metadata={"help": "The number of examples to pre-load for shuffling."}
     )
     num_train_steps: int = field(default=50000, metadata={"help": "The number of training steps."})
     num_eval_samples: int = field(default=50000, metadata={"help": "The number of samples to be used for evaluation"})
     prefetch_buffer: int = field(default=8, metadata={"help": "The number of batches to prefetch for loading"})
->>>>>>> license
 
     def __post_init__(self):
         if self.dataset_name is None and self.train_file is None and self.validation_file is None:
@@ -245,33 +207,6 @@ class TrainState(train_state.TrainState):
         return jax_utils.replicate(self).replace(dropout_rng=shard_prng_key(self.dropout_rng))
 
 
-<<<<<<< HEAD
-def data_loader(rng: jax.random.PRNGKey, dataset: Dataset, batch_size: int, shuffle: bool = False):
-    """
-    Returns batches of size `batch_size` from truncated `dataset`, sharded over all local devices.
-    Shuffle batches if `shuffle` is `True`.
-    """
-    steps_per_epoch = len(dataset) // batch_size
-
-    if shuffle:
-        batch_idx = jax.random.permutation(rng, len(dataset))
-    else:
-        batch_idx = jnp.arange(len(dataset))
-
-    batch_idx = batch_idx[: steps_per_epoch * batch_size]  # Skip incomplete batch.
-    batch_idx = batch_idx.reshape((steps_per_epoch, batch_size))
-
-    for idx in batch_idx:
-        batch = dataset[idx]
-        batch = {k: jnp.array(v) for k, v in batch.items()}
-
-        batch = shard(batch)
-
-        yield batch
-
-
-=======
->>>>>>> license
 def write_train_metric(summary_writer, train_metrics, train_time, step):
     summary_writer.scalar("train_time", train_time, step)
 
@@ -288,25 +223,15 @@ def write_eval_metric(summary_writer, eval_metrics, step):
 
 
 def create_learning_rate_fn(
-<<<<<<< HEAD
-    train_ds_size: int, train_batch_size: int, num_train_epochs: int, num_warmup_steps: int, learning_rate: float
-) -> Callable[[int], jnp.array]:
-    """Returns a linear warmup, linear_decay learning rate function."""
-    steps_per_epoch = train_ds_size // train_batch_size
-    num_train_steps = steps_per_epoch * num_train_epochs
-=======
     num_train_steps: int, train_batch_size: int, num_warmup_steps: int, learning_rate: float
 ) -> Callable[[int], jnp.array]:
     """Returns a linear warmup, linear_decay learning rate function."""
->>>>>>> license
     warmup_fn = optax.linear_schedule(init_value=0.0, end_value=learning_rate, transition_steps=num_warmup_steps)
     decay_fn = optax.linear_schedule(
         init_value=learning_rate, end_value=0, transition_steps=num_train_steps - num_warmup_steps
     )
     schedule_fn = optax.join_schedules(schedules=[warmup_fn, decay_fn], boundaries=[num_warmup_steps])
     return schedule_fn
-<<<<<<< HEAD
-=======
 def gpt3_schedule(warmup_steps,
                   total_steps,
                   peak_lr,
@@ -318,16 +243,12 @@ def gpt3_schedule(warmup_steps,
         return warmup_pct * peak_lr - (peak_lr - end_lr) * (1 - jnp.cos(jnp.pi * anneal_pct)) / 2
 
     return sch
->>>>>>> license
 
 # utils
 def mb_item(x):
     return x.item() if hasattr(x, "item") else x
 
-<<<<<<< HEAD
-=======
 
->>>>>>> license
 #checkpoint functions
 def save_model_checkpoint(model, save_dir, state, with_opt:bool=True, push_to_hub:bool=False):
     """
@@ -391,11 +312,7 @@ def restore_model_checkpoint(save_dir, state):
     logger.info("checkpoint restored")
     # reinstantiate inner opt state to avoid type conflict
     if hasattr(opt_state, "inner_opt_state"):
-<<<<<<< HEAD
-        print("restoring state of multisteps optimizer")
-=======
         print("restoring state ofmultisteps optimizer")
->>>>>>> license
         inner_opt_state = reinstantiate_states(opt_state.inner_opt_state)
         ms_state_dict = {k:getattr(state.opt_state, k) for k in state.opt_state._fields}
         ms_state_dict["inner_opt_state"] = inner_opt_state
@@ -414,11 +331,6 @@ def rotate_checkpoints(ckpt_dir:str, save_total_limit:int):
         logger.info(f"Deleting older checkpoint [{ckpt}] due to save_total_limit ({save_total_limit})")
         shutil.rmtree(ckpt)
 
-<<<<<<< HEAD
-
-
-=======
->>>>>>> license
 def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
@@ -472,44 +384,6 @@ def main():
     # download the dataset.
     if data_args.dataset_name is not None:
         # Downloading and loading a dataset from the hub.
-<<<<<<< HEAD
-        whole_dataset = load_dataset(
-            data_args.dataset_name, data_args.dataset_config_name, cache_dir=model_args.cache_dir, keep_in_memory=False
-        )
-
-        whole_dataset = concatenate_datasets([whole_dataset["train"], whole_dataset["test"]])
-        split_id = int(0.9*len(whole_dataset))
-        train_idx = list(range(split_id))
-        valid_idx = list(range(split_id, len(whole_dataset)))
-        dataset = DatasetDict({
-            "train":whole_dataset.select(train_idx),
-            "validation":whole_dataset.select(valid_idx)
-        })
-
-        if "validation" not in dataset.keys():
-            dataset["validation"] = load_dataset(
-                data_args.dataset_name,
-                data_args.dataset_config_name,
-                split=f"train[:{data_args.validation_split_percentage}%]",
-                cache_dir=model_args.cache_dir,
-            )
-            dataset["train"] = load_dataset(
-                data_args.dataset_name,
-                data_args.dataset_config_name,
-                split=f"train[{data_args.validation_split_percentage}%:]",
-                cache_dir=model_args.cache_dir,
-            )
-    else:
-        data_files = {}
-        if data_args.train_file is not None:
-            data_files["train"] = data_args.train_file
-        if data_args.validation_file is not None:
-            data_files["validation"] = data_args.validation_file
-        extension = data_args.train_file.split(".")[-1]
-        if extension == "txt":
-            extension = "text"
-        dataset = load_dataset(extension, data_files=data_files, cache_dir=model_args.cache_dir)
-=======
         train_dataset = load_dataset(
             data_args.dataset_name,
             data_args.dataset_config_name,
@@ -527,7 +401,6 @@ def main():
             split="validation"
         )
         
->>>>>>> license
     # See more about loading any type of standard or custom dataset (from files, python dict, pandas DataFrame, etc) at
     # https://huggingface.co/docs/datasets/loading_datasets.html.
 
@@ -557,12 +430,7 @@ def main():
             "You are instantiating a new tokenizer from scratch. This is not supported by this script."
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
-<<<<<<< HEAD
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-=======
 
->>>>>>> license
     if model_args.model_name_or_path:
         model = FlaxAutoModelForCausalLM.from_pretrained(
             model_args.model_name_or_path, config=config, seed=training_args.seed, dtype=getattr(jnp, model_args.dtype)
@@ -574,13 +442,6 @@ def main():
 
     # Preprocessing the datasets.
     # First we tokenize all the texts.
-<<<<<<< HEAD
-    if training_args.do_train:
-        column_names = dataset["train"].column_names
-    else:
-        column_names = dataset["validation"].column_names
-    text_column_name = data_args.text_column_name if data_args.text_column_name in column_names else column_names[0]
-=======
     # column_names = eval_dataset.column_names
     text_column_name = data_args.text_column_name # if data_args.text_column_name in column_names else column_names[0]
 
@@ -608,7 +469,6 @@ def main():
         # num_proc=data_args.preprocessing_num_workers,
         # load_from_cache_file=not data_args.overwrite_cache,
     )
->>>>>>> license
 
     if data_args.block_size is None:
         block_size = tokenizer.model_max_length
@@ -626,43 +486,6 @@ def main():
             )
         block_size = min(data_args.block_size, tokenizer.model_max_length)
 
-<<<<<<< HEAD
-    def tokenize_function(examples):
-        toks = tokenizer(examples["question"],
-                         examples["answer"], 
-                         max_length=block_size,
-                         padding="max_length",
-                         truncation=True, 
-                         return_token_type_ids=True,
-                        #  return_tensors="np",
-                         )
-        labels = toks["input_ids"].copy()
-        toks["labels"] = labels
-        return toks
-
-    lm_datasets = dataset.map(
-        tokenize_function,
-        batched=True,
-        num_proc=data_args.preprocessing_num_workers,
-        remove_columns=column_names,
-        load_from_cache_file=not data_args.overwrite_cache,
-    )
-
-    if training_args.do_train:
-        if "train" not in lm_datasets:
-            raise ValueError("--do_train requires a train dataset")
-        train_dataset = lm_datasets["train"]
-        if data_args.max_train_samples is not None:
-            train_dataset = train_dataset.select(range(data_args.max_train_samples))
-
-    if training_args.do_eval:
-        if "validation" not in lm_datasets:
-            raise ValueError("--do_eval requires a validation dataset")
-        eval_dataset = lm_datasets["validation"]
-        if data_args.max_eval_samples is not None:
-            eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
-
-=======
     # Note that with `batched=True`, this map processes 1,000 texts together, so group_texts throws away a remainder
     # for each of those groups of 1,000 texts. You can adjust that batch_size here but a higher value might be slower
     # to preprocess.
@@ -689,7 +512,6 @@ def main():
     #     if data_args.max_eval_samples is not None:
     #         eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
     
->>>>>>> license
     # Enable tensorboard only on the master node
     has_tensorboard = is_tensorboard_available()
     if has_tensorboard and jax.process_index() == 0:
@@ -732,21 +554,6 @@ def main():
     rng, dropout_rng = jax.random.split(rng)
 
     # Store some constant
-<<<<<<< HEAD
-    num_epochs = int(training_args.num_train_epochs)
-    train_batch_size = int(training_args.per_device_train_batch_size) * jax.device_count() * training_args.gradient_accumulation_steps
-    eval_batch_size = int(training_args.per_device_eval_batch_size) * jax.device_count()
-    steps_per_epoch = len(train_dataset) // train_batch_size
-    total_train_steps = steps_per_epoch * num_epochs
-
-    # Create learning rate schedule
-    linear_decay_lr_schedule_fn = create_learning_rate_fn(
-        len(train_dataset),
-        train_batch_size,
-        training_args.num_train_epochs,
-        training_args.warmup_steps,
-        training_args.learning_rate,
-=======
     train_batch_size = int(training_args.per_device_train_batch_size) * jax.device_count() * training_args.gradient_accumulation_steps
     eval_batch_size = int(training_args.per_device_eval_batch_size) * jax.device_count()
     total_train_steps = training_args.max_steps * training_args.gradient_accumulation_steps
@@ -757,7 +564,6 @@ def main():
         model_args.decay_steps,
         training_args.learning_rate,
         training_args.learning_rate / 10.
->>>>>>> license
     )
 
     # We use Optax's "masking" functionality to not apply weight decay
@@ -780,19 +586,11 @@ def main():
         # We use the default parameters here to initialize adafactor,
         # For more details about the parameters please check https://github.com/deepmind/optax/blob/ed02befef9bf81cbbf236be3d2b0e032e9ed4a40/optax/_src/alias.py#L74
         optimizer = optax.adafactor(
-<<<<<<< HEAD
-            learning_rate=linear_decay_lr_schedule_fn,
-        )
-    else:
-        optimizer = optax.adamw(
-            learning_rate=linear_decay_lr_schedule_fn,
-=======
             learning_rate=gpt3_schedule_fn,
         )
     else:
         optimizer = optax.adamw(
             learning_rate=gpt3_schedule_fn,
->>>>>>> license
             b1=training_args.adam_beta1,
             b2=training_args.adam_beta2,
             eps=training_args.adam_epsilon,
@@ -800,11 +598,7 @@ def main():
             mask=decay_mask_fn,
         )
         optimizer = optax.chain(
-<<<<<<< HEAD
-            optax.clip_by_global_norm(1.),
-=======
             optax.clip_by_global_norm(1),
->>>>>>> license
             optimizer
         )
     if training_args.gradient_accumulation_steps > 1:
@@ -822,17 +616,10 @@ def main():
     else:
         resume_step = 0
 
-<<<<<<< HEAD
-    def loss_fn(logits, labels, labels_mask):
-        shift_logits = logits[..., :-1, :]
-        shift_labels = labels[..., 1:]
-        loss = optax.softmax_cross_entropy(shift_logits, onehot(shift_labels, shift_logits.shape[-1])) * labels_mask[..., 1:]
-=======
     def loss_fn(logits, labels):
         shift_logits = logits[..., :-1, :]
         shift_labels = labels[..., 1:]
         loss = optax.softmax_cross_entropy(shift_logits, onehot(shift_labels, shift_logits.shape[-1]))
->>>>>>> license
         return loss.mean()
 
     # Define gradient update step fn
@@ -841,16 +628,8 @@ def main():
 
         def compute_loss(params):
             labels = batch.pop("labels")
-<<<<<<< HEAD
-            token_type_ids = batch.pop("token_type_ids")
-            labels_mask = batch["attention_mask"] - token_type_ids
-            del token_type_ids
-            logits = state.apply_fn(**batch, params=params, dropout_rng=dropout_rng, train=True)[0]
-            loss = loss_fn(logits, labels, labels_mask)
-=======
             logits = state.apply_fn(**batch, params=params, dropout_rng=dropout_rng, train=True)[0]
             loss = loss_fn(logits, labels)
->>>>>>> license
             return loss
 
         grad_fn = jax.value_and_grad(compute_loss)
@@ -859,11 +638,7 @@ def main():
 
         new_state = state.apply_gradients(grads=grad, dropout_rng=new_dropout_rng)
 
-<<<<<<< HEAD
-        metrics = {"loss": loss, "learning_rate": linear_decay_lr_schedule_fn(state.step // grad_accum_steps)}
-=======
         metrics = {"loss": loss, "learning_rate": gpt3_schedule_fn(state.step // grad_accum_steps)}
->>>>>>> license
         metrics = jax.lax.pmean(metrics, axis_name="batch")
 
         return new_state, metrics
@@ -871,16 +646,8 @@ def main():
     # Define eval fn
     def eval_step(params, batch):
         labels = batch.pop("labels")
-<<<<<<< HEAD
-        token_type_ids = batch.pop("token_type_ids")
-        labels_mask = batch["attention_mask"] - token_type_ids
-        del token_type_ids
-        logits = model(**batch, params=params, train=False)[0]
-        loss = loss_fn(logits, labels, labels_mask)
-=======
         logits = model(**batch, params=params, train=False)[0]
         loss = loss_fn(logits, labels)
->>>>>>> license
 
         # summarize metrics
         metrics = {"loss": loss}
@@ -895,117 +662,15 @@ def main():
     state = state.replicate()
 
     logger.info("***** Running training *****")
-<<<<<<< HEAD
-    logger.info(f"  Num examples = {len(train_dataset)}")
-    logger.info(f"  Num Epochs = {num_epochs}")
-    logger.info(f"  Instantaneous batch size per device = {training_args.per_device_train_batch_size}")
-    logger.info(f"  Total train batch size (w. parallel, distributed and grad_accum) = {train_batch_size}")
-    logger.info(f"  Total optimization steps = {total_train_steps}")
-=======
     logger.info(f"  Instantaneous batch size per device = {training_args.per_device_train_batch_size}")
     logger.info(f"  Total train batch size (w. parallel, distributed and grad_accum) = {train_batch_size}")
     logger.info(f"  Total optimization steps = {training_args.max_steps}")
->>>>>>> license
 
     if not training_args.skip_memory_metrics:
         server = jax.profiler.start_server(9999)
 
     train_time = 0
     train_metrics = []
-<<<<<<< HEAD
-    resume_epoch = resume_step // (steps_per_epoch * grad_accum_steps)
-    epochs = tqdm(range(num_epochs), desc=f"Epoch ... ({resume_epoch+1}/{num_epochs})", position=0)
-    if resume_step != 0:
-        logger.info(f"Skipping to epoch {resume_epoch} step {resume_step // grad_accum_steps}")
-    for epoch in epochs:
-        # ======================== Training ================================
-        if epoch <  resume_epoch:
-            continue
-        
-        train_start = time.time()
-
-        # Create sampling rng
-        rng, input_rng = jax.random.split(rng)
-
-        # Generate an epoch by shuffling sampling indices from the train dataset
-        train_loader = data_loader(input_rng, train_dataset, train_batch_size // grad_accum_steps, shuffle=True)
-        # train
-        steps_trained_progress_bar = tqdm(range(steps_per_epoch), desc="Training...", position=1,
-                                          leave=False, initial=(resume_step // grad_accum_steps))
-        for step in range(steps_per_epoch * grad_accum_steps):
-            cur_step = epoch * (steps_per_epoch*grad_accum_steps) + step
-            # skip to the step from which we are resuming
-            if cur_step < resume_step:
-                continue
-
-            batch = next(train_loader)
-            state, train_metric = p_train_step(state, batch)
-            train_metrics.append(train_metric)
-            if step % grad_accum_steps == 0:
-                steps_trained_progress_bar.update(1)
-
-            if cur_step % (training_args.logging_steps * grad_accum_steps)== 0 and cur_step > 0:
-                # Save metrics
-                train_metric = unreplicate(train_metric)
-                train_time += time.time() - train_start
-                if has_tensorboard and jax.process_index() == 0:
-                    write_train_metric(summary_writer, train_metrics, train_time, cur_step)
-                if has_wandb and jax.process_index() == 0 and ("wandb" in training_args.report_to):
-                    # TODO: add accumulation of metrics
-                    _metrics = {k if k=="learning_rate" else f"train_{k}":mb_item(v.mean()) for k, v in train_metric.items()}
-                    wandb.log({"training_step":cur_step, **_metrics}, commit=True)
-
-                epochs.write(
-                    f"Step... ({cur_step} | Loss: {train_metric['loss'].mean()}, Learning Rate: {train_metric['learning_rate'].mean()})"
-                )
-
-                train_metrics = []
-
-            if cur_step % (training_args.eval_steps * grad_accum_steps) == 0 and cur_step > 0:
-                # ======================== Evaluating ==============================
-                eval_metrics = []
-                eval_loader = data_loader(input_rng, eval_dataset, eval_batch_size)
-                eval_steps = len(eval_dataset) // eval_batch_size
-                for _ in tqdm(range(eval_steps), desc="Evaluating...", position=2, leave=False):
-                    # Model forward
-                    batch = next(eval_loader)
-                    metrics = p_eval_step(state.params, batch)
-                    eval_metrics.append(metrics)
-
-                # normalize eval metrics
-                eval_metrics = get_metrics(eval_metrics)
-                eval_metrics = jax.tree_map(jnp.mean, eval_metrics)
-
-                try:
-                    eval_metrics["perplexity"] = math.exp(eval_metrics["loss"])
-                except OverflowError:
-                    eval_metrics["perplexity"] = float("inf")
-
-                # Print metrics and update progress bar
-                desc = f"Step... ({cur_step} | Eval Loss: {eval_metrics['loss']} | Eval Perplexity: {eval_metrics['perplexity']})"
-                epochs.write(desc)
-                epochs.desc = desc
-
-                # Save metrics
-                if has_tensorboard and jax.process_index() == 0:
-                    # cur_step = epoch * (len(train_dataset) // train_batch_size)
-                    write_eval_metric(summary_writer, eval_metrics, cur_step)
-                if has_wandb and jax.process_index() == 0 and ("wandb" in training_args.report_to):
-                    _metrics = {f"eval_{k}":mb_item(v) for k, v in eval_metrics.items()}
-                    wandb.log({"eval_step":cur_step, **_metrics})
-
-            if (cur_step % (training_args.save_steps * grad_accum_steps) == 0 and 
-                training_args.save_strategy == IntervalStrategy.STEPS and 
-                cur_step > 0):
-                # save checkpoint after each epoch and push checkpoint to the hub
-                if jax.process_index() == 0:
-                    save_model_checkpoint(model, training_args.output_dir, state, with_opt=model_args.save_optimizer,
-                                          push_to_hub=training_args.push_to_hub)
-                    if training_args.save_total_limit is not None:
-                        rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
-        
-        if training_args.save_strategy == IntervalStrategy.EPOCH:
-=======
     # TODO: figure out training duration
     steps = tqdm(range(training_args.max_steps), position=0, initial=resume_step)
     for step in range(total_train_steps):
@@ -1089,20 +754,10 @@ def main():
                 wandb.log({"eval_step":cur_step//grad_accum_steps, **_metrics})
 
         if cur_step % (training_args.save_steps * grad_accum_steps) == 0 and cur_step > 0:
->>>>>>> license
             # save checkpoint after each epoch and push checkpoint to the hub
             if jax.process_index() == 0:
                 save_model_checkpoint(model, training_args.output_dir, state, with_opt=model_args.save_optimizer,
                                       push_to_hub=training_args.push_to_hub)
-<<<<<<< HEAD
-                if training_args.save_total_limit is not None:
-                    rotate_checkpoints(training_args.output_dir, training_args.save_total_limit)
-
-
-    # save model after training is over
-    if jax.process_index() == 0:
-        save_model_checkpoint(model, training_args.output_dir, state, with_opt=model_args.save_optimizer, push_to_hub=training_args.push_to_hub)
-=======
                 # if model_args.save_optimizer:
                     # this saves full state including optimizer
                     # save_checkpoint(training_args.output_dir, jax_utils.unreplicate(state), cur_step, keep=training_args.save_total_limit, overwrite=True)
@@ -1115,12 +770,8 @@ def main():
                           push_to_hub=training_args.push_to_hub)
 
     logger.info("***Training comleted")
->>>>>>> license
 
 
 if __name__ == "__main__":
     main()
-<<<<<<< HEAD
-=======
 
->>>>>>> license
