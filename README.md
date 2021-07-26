@@ -1,4 +1,5 @@
 # GPT-Code-Clippy (GPT-CC)
+**Please refer to our new [GitHub Wiki](https://github.com/ncoop57/gpt-code-clippy/wiki) which documents our efforts in detail in creating the open source version of GitHub  Copilot**
 
 <p align="center">
     <br>
