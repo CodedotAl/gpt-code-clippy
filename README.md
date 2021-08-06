@@ -103,6 +103,7 @@ Special thanks to our contributors!!
 - https://github.com/arunraja-hub
 - https://github.com/reshinthadithyan
 - https://github.com/shpotes
+- https://github.com/taisazero
 - https://github.com/neubig
 - https://github.com/Mrinal18
 - and everyone else that helped out the project!
