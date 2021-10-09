@@ -18,4 +18,8 @@ With the following requirements performed you can now run the `evaluation.py` sc
 ```
 python evaluate.py --model_name_or_path=model_name_or_path --human_eval_path=<path/to/human-eval/data/HumanEval.jsonl.gz> --out_path=./model_results
 ```
+
 So for example if you want to evaluate the EleutherAI GPT Neo 125M
+```
+python evaluate.py EleutherAI/gpt-neo-125M ../dependency_repos/human-eval/data/HumanEval.jsonl.gz model_results/
+```
