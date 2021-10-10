@@ -200,7 +200,7 @@ class DataTrainingArguments:
 
 
 class TrainState(train_state.TrainState):
-    dropout_rng: jnp.ndarray
+    dropout_rng: jnp.ndarray = field(default=None)
 
     def replicate(self):
         return jax_utils.replicate(self).replace(dropout_rng=shard_prng_key(self.dropout_rng))
