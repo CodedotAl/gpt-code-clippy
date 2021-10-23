@@ -80,7 +80,7 @@ Coming soon...
 
 ## Demo
 
-A [Visual Studio Code](https://code.visualstudio.com/) which uses the [HuggingFace Inference API](https://api-inference.huggingface.co/docs/python/html/index.html) is available and can be found [here](https://github.com/ncoop57/code-clippy-vscode).
+A [Visual Studio Code](https://code.visualstudio.com/) extension which uses the [HuggingFace Inference API](https://api-inference.huggingface.co/docs/python/html/index.html) is available and can be found [here](https://github.com/ncoop57/code-clippy-vscode).
 
 We also have [Huggingface's Space demo](https://huggingface.co/spaces/flax-community/code-clippy-problem-solver) where you can specify and problem in the format of a programming competition question.
 
