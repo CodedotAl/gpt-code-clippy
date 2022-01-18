@@ -30,8 +30,13 @@ The final dataset is available [here](https://the-eye.eu/public/AI/training_data
 
 The datasheet discussing in more detail the construction, usage, and limitation of the dataset can be found [here](https://github.com/ncoop57/datasets/tree/code-clippy/datasets/code_clippy). We hope to get it officially into Huggingface's datasets library [soon](https://github.com/huggingface/datasets/pull/2666)!
 
-## Caveats with respect to the dataset
-We recently came to know about a bug which happened during the scraping of the dataset. We found out that the file names are obsolete/misleading. Refer this [issue](https://github.com/CodedotAl/gpt-code-clippy/issues/71). We thank Naman for pointing out the issue. This might have two implications due to the issue. Since we had filtered the training dataset using the file extension, we might have had wrong datapoints in the dataset while training and we might have missed a lot of right datapoints that belong to the languages. One intermittent fix would be to use tools like lib-magic to some extension for the purpose of filtering. More detailed steps can be found [here](https://github.com/CodedotAl/gpt-code-clippy/issues/71#issuecomment-955613925).
+## ISSUE : Wrong Filenames in the Dataset
+We recently came to know about a bug which happened during the scraping of the dataset. We found out that the file names are obsolete/misleading.[Refer this [issue](https://github.com/CodedotAl/gpt-code-clippy/issues/71)] We thank Naman for pointing out the issue.      
+    
+This might have two implications,    
+- Since the filtering for the training dataset is done using the file extension, we might have had wrong datapoints in the dataset while training and we might have missed a lot of right datapoints that belong to the languages of choice.      
+    
+One intermittent fix would be to use tools like lib-magic to some extension for the purpose of filtering. More detailed steps can be found [here](https://github.com/CodedotAl/gpt-code-clippy/issues/71#issuecomment-955613925).
     
     
 ## Models
